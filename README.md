@@ -161,6 +161,31 @@ restarting Home Assistant, add and configure the integration through the native 
 | **Notification Service**  | The notification service of your choice for selecting a single device or a group of devices, instead of alerting all mobile devices registered in home assistant. The default is `notify.notify`, which notifies all devices.
 
 
+## 4. Add the Printer Dashboard (optional)
+
+[`dashboards/printer_dashboard.yaml`](dashboards/printer_dashboard.yaml) is a ready-made dashboard with two views:
+
+- **Printer**: camera, print progress, temperatures, printer status and the spaghetti detection values.
+- **Filament**: the AMS slots with colour, filament, type and remaining amount, the external spool and the AMS climate.
+
+It only uses built-in Home Assistant cards. The labels are in Norwegian and can be changed in the file.
+
+1. Find the prefix of your printer's entity IDs under **Settings → Devices & services → Bambu Lab**. For
+   `sensor.p1s_01p00a123456789_print_status` the prefix is `p1s_01p00a123456789`.
+
+2. Copy the contents of [`dashboards/printer_dashboard.yaml`](dashboards/printer_dashboard.yaml) and replace every
+   `SKRIVER` with that prefix, for example with search and replace in a text editor.
+
+3. Go to **Settings → Dashboards → Add dashboard → New dashboard from scratch** and open the new dashboard.
+
+4. Click the pencil, then **⋮ → Raw configuration editor**, replace everything with the edited contents and save.
+
+Cards that show **Entity not found** refer to something your printer does not have, such as an AMS or the AMS
+temperature sensor. Remove those entries, or pick the right entity in the card editor. For a second AMS, copy the AMS
+card and change `ams_1` to `ams_2`.
+
+The values in the spaghetti detection card are maintained by the automation, so do not change them by hand.
+
 ## Credits
 
 - **Greg Hesp ([@greghesp](https://github.com/greghesp))**: https://github.com/greghesp/ha-bambulab

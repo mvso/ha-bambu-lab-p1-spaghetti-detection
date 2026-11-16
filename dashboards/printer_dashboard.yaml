@@ -1,0 +1,157 @@
+# Home Assistant dashboard for a Bambu Lab printer with spaghetti detection.
+#
+# Replace every SKRIVER with the prefix of your printer's entity IDs, for
+# example p1s_01p00a123456789. See the README for how to install it.
+#
+# Entity IDs follow the Bambu Lab integration's English entity names. Remove
+# or adjust the entries your printer does not have.
+title: 3D-printer
+views:
+  - title: Printer
+    path: printer
+    icon: mdi:printer-3d
+    cards:
+      - type: picture-entity
+        entity: camera.SKRIVER_camera
+        camera_view: live
+        show_name: false
+        show_state: false
+
+      - type: vertical-stack
+        cards:
+          - type: gauge
+            entity: sensor.SKRIVER_print_progress
+            name: Fremdrift
+            min: 0
+            max: 100
+          - type: entities
+            title: Utskrift
+            entities:
+              - entity: sensor.SKRIVER_task_name
+                name: Jobb
+              - entity: sensor.SKRIVER_print_status
+                name: Status
+              - entity: sensor.SKRIVER_current_stage
+                name: Steg
+              - entity: sensor.SKRIVER_remaining_time
+                name: Gjenstående tid
+              - entity: sensor.SKRIVER_end_time
+                name: Ferdig
+              - entity: sensor.SKRIVER_current_layer
+                name: Lag
+              - entity: sensor.SKRIVER_total_layer_count
+                name: Lag totalt
+              - entity: sensor.SKRIVER_speed_profile
+                name: Hastighet
+              - entity: sensor.SKRIVER_active_tray
+                name: Aktivt filament
+
+      - type: vertical-stack
+        cards:
+          - type: glance
+            title: Temperaturer
+            entities:
+              - entity: sensor.SKRIVER_nozzle_temperature
+                name: Dyse
+              - entity: sensor.SKRIVER_nozzle_target_temperature
+                name: Dyse mål
+              - entity: sensor.SKRIVER_bed_temperature
+                name: Plate
+              - entity: sensor.SKRIVER_bed_target_temperature
+                name: Plate mål
+          - type: history-graph
+            hours_to_show: 3
+            entities:
+              - entity: sensor.SKRIVER_nozzle_temperature
+                name: Dyse
+              - entity: sensor.SKRIVER_bed_temperature
+                name: Plate
+
+      - type: entities
+        title: Skriver
+        entities:
+          - entity: light.SKRIVER_chamber_light
+            name: Kammerlys
+          - entity: binary_sensor.SKRIVER_online
+            name: Tilkoblet
+          - entity: binary_sensor.SKRIVER_print_error
+            name: Utskriftsfeil
+          - entity: binary_sensor.SKRIVER_hms_errors
+            name: HMS-feil
+          - entity: sensor.SKRIVER_wi_fi_signal
+            name: Wi-Fi-signal
+
+      - type: vertical-stack
+        cards:
+          - type: entities
+            title: Spaghetti-deteksjon
+            entities:
+              - entity: number.bambu_lab_p1_spaghetti_detection_normalized_p
+                name: Sannsynlighet for feil
+              - entity: number.bambu_lab_p1_spaghetti_detection_adjusted_ewm_mean
+                name: Glidende snitt
+              - entity: number.bambu_lab_p1_spaghetti_detection_current_frame_number
+                name: Bilder analysert (denne jobben)
+              - entity: number.bambu_lab_p1_spaghetti_detection_lifetime_frame_number
+                name: Bilder analysert (totalt)
+          - type: history-graph
+            hours_to_show: 3
+            entities:
+              - entity: number.bambu_lab_p1_spaghetti_detection_adjusted_ewm_mean
+                name: Glidende snitt
+
+  - title: Filament
+    path: filament
+    icon: mdi:printer-3d-nozzle
+    cards:
+      # One row per AMS slot plus the external spool. For a second AMS, copy
+      # this card and change ams_1 to ams_2.
+      - type: markdown
+        title: AMS 1
+        content: |-
+          {% set printer = 'SKRIVER' %}
+          | | Spor | Filament | Type | Rest |
+          |:-:|:-:|:--|:--|--:|
+          {% for n in range(1, 5) -%}
+          {% set e = 'sensor.' ~ printer ~ '_ams_1_tray_' ~ n -%}
+          {% set remain = state_attr(e, 'remain') -%}
+          | <font color="{{ (state_attr(e, 'color') or '#888888')[:7] }}">⬤</font> | {{ n }}{{ ' ▶' if state_attr(e, 'active') else '' }} | {{ 'Tomt' if state_attr(e, 'empty') else ('–' if states(e) in ['unknown', 'unavailable'] else states(e)) }} | {{ state_attr(e, 'type') or '–' }} | {{ remain ~ ' %' if remain is number and remain >= 0 and not state_attr(e, 'empty') else '–' }} |
+          {% endfor -%}
+          {% set e = 'sensor.' ~ printer ~ '_externalspool_external_spool' -%}
+          | <font color="{{ (state_attr(e, 'color') or '#888888')[:7] }}">⬤</font> | Ekstern{{ ' ▶' if state_attr(e, 'active') else '' }} | {{ 'Tomt' if state_attr(e, 'empty') else ('–' if states(e) in ['unknown', 'unavailable'] else states(e)) }} | {{ state_attr(e, 'type') or '–' }} | – |
+
+          ▶ markerer filamentet som er i bruk.
+
+      - type: entities
+        title: AMS-klima
+        entities:
+          - entity: sensor.SKRIVER_ams_1_humidity_index
+            name: Fuktighetsindeks
+          - entity: sensor.SKRIVER_ams_1_humidity
+            name: Luftfuktighet
+          - entity: sensor.SKRIVER_ams_1_temperature
+            name: Temperatur
+
+      - type: entities
+        title: Filament i bruk
+        entities:
+          - entity: sensor.SKRIVER_active_tray
+            name: Aktivt filament
+          - entity: binary_sensor.SKRIVER_extruder_filament
+            name: Filament i ekstruder
+          - entity: sensor.SKRIVER_print_weight
+            name: Filamentforbruk (denne jobben)
+
+      - type: entities
+        title: Spor (detaljer)
+        entities:
+          - entity: sensor.SKRIVER_ams_1_tray_1
+            name: Spor 1
+          - entity: sensor.SKRIVER_ams_1_tray_2
+            name: Spor 2
+          - entity: sensor.SKRIVER_ams_1_tray_3
+            name: Spor 3
+          - entity: sensor.SKRIVER_ams_1_tray_4
+            name: Spor 4
+          - entity: sensor.SKRIVER_externalspool_external_spool
+            name: Ekstern spole
