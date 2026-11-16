@@ -9,7 +9,7 @@ your prints.
 > [nberktumer/ha-bambu-lab-p1-spaghetti-detection](https://github.com/nberktumer/ha-bambu-lab-p1-spaghetti-detection).
 > The installation links below install from this fork.
 
-If you like this automation and would like to support its original author, you can [buy him a coffee](https://www.patreon.com/nberk/shop).
+If you like this automation and would like to support its original author, you can [buy them a coffee](https://www.patreon.com/nberk/shop).
 
 ## Features
 
