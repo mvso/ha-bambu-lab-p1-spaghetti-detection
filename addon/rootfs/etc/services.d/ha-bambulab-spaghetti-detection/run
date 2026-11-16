@@ -1,11 +1,15 @@
 #!/usr/bin/with-contenv bashio
 
-declare ML_API_TOKEN
-declare PORT
-
-ML_API_TOKEN=$(bashio::config 'obico_api_secret')
+# A standalone container gets ML_API_TOKEN from its environment. As a Home
+# Assistant add-on the secret comes from the add-on options instead.
+if [[ -z "${ML_API_TOKEN:-}" ]] && bashio::config.has_value 'obico_api_secret'; then
+    ML_API_TOKEN=$(bashio::config 'obico_api_secret')
+fi
 # gunicorn reads the token from its environment, so it has to be exported
-export ML_API_TOKEN
+export ML_API_TOKEN="${ML_API_TOKEN:-}"
 
 cd /app
-FLASK_APP=server.py venv/bin/gunicorn --bind "0.0.0.0:3333" --workers 1 wsgi:application
+# The server only needs to read its own files, so it does not run as root.
+# HOME points at a writable directory for gunicorn's runtime files.
+export HOME=/tmp
+FLASK_APP=server.py exec s6-setuidgid nobody venv/bin/gunicorn --bind "0.0.0.0:3333" --workers 1 wsgi:application

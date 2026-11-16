@@ -63,42 +63,61 @@ To install Obico ML server as a Home Assistant Add-on you have 2 options:
 1. Click the **Add Add-On Repository** button below, click **Add → Close** (You might need to enter the **internal
    IP address** of your Home Assistant instance first).
 
-[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https://github.com/nberktumer/ha-bambu-lab-p1-spaghetti-detection)
+[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https://github.com/mvso/ha-bambu-lab-p1-spaghetti-detection)
 
 2. Add the repository URL under **Settings → Add-ons → ADD-ON STORE** and click **⋮ → Repositories**:
 
-       https://github.com/nberktumer/ha-bambu-lab-p1-spaghetti-detection
+       https://github.com/mvso/ha-bambu-lab-p1-spaghetti-detection
+
+After adding the repository, install the add-on. The image is built on your Home Assistant machine from the sources in
+this repository, so the first installation takes several minutes.
+
+Then open the add-on **Configuration** tab and enter a secret of your own in `obico_api_secret` before starting it. There is
+no default secret, and the old value `obico_api_secret` is rejected. A good secret can be generated with
+`openssl rand -hex 32`.
 
 ### Install Obico ML Server as a Standalone Docker Container
 
-1. Create docker container using the following command:
+The standalone container is built from the same sources as the add-on.
+
+1. Clone this repository and build the image:
+
+       git clone https://github.com/mvso/ha-bambu-lab-p1-spaghetti-detection
+       cd ha-bambu-lab-p1-spaghetti-detection
+       docker build -t ha_bambu_lab_p1_spaghetti_detection:local addon
+
+2. Create the container with a secret of your own (`openssl rand -hex 32` generates one):
 
        docker create \
          --restart unless-stopped \
-         --env ML_API_TOKEN=obico_api_secret \
+         --security-opt no-new-privileges:true \
+         --env ML_API_TOKEN=<your own secret> \
          --publish 3333:3333 \
          --name ha_bambu_lab_p1_spaghetti_detection \
-         nberk/ha_bambu_lab_p1_spaghetti_detection_standalone:latest
+         ha_bambu_lab_p1_spaghetti_detection:local
 
-2. Start the container using the following command:
+3. Start the container using the following command:
 
        docker start ha_bambu_lab_p1_spaghetti_detection
 
 ### Install Obico ML Server as a Standalone Docker Container with Docker Compose
 
-1. Download the docker-compose.yaml from the repository
+1. Clone this repository:
 
-2. Edit the environment variables section in the docker compose yaml:
+       git clone https://github.com/mvso/ha-bambu-lab-p1-spaghetti-detection
+       cd ha-bambu-lab-p1-spaghetti-detection
 
-      ```
-      environment:
-        - ML_API_TOKEN=obico_api_secret
-        - TZ=Europe/London
-      ```
+2. Build and start the container with a secret of your own:
 
-3. Run the command:
+       ML_API_TOKEN=<your own secret> docker compose up -d --build
 
-       docker compose up -d
+### Security notes
+
+- The ML server rejects every detection request until a secret of your own is configured.
+- Keep port `3333` on your local network. The server fetches the image URL it is given, and the secret travels over
+  plain HTTP, so it must not be reachable from the internet.
+- The image URL sent to the ML server and included in notifications contains Home Assistant's short-lived camera access
+  token.
 
 ## 2. Install Home Assistant Integration
 
@@ -106,7 +125,7 @@ To install Obico ML server as a Home Assistant Add-on you have 2 options:
 
 1. Click the button below to download and install the integration:
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=nberktumer&repository=ha-bambu-lab-p1-spaghetti-detection&category=Integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=mvso&repository=ha-bambu-lab-p1-spaghetti-detection&category=Integration)
 
 2. Go to **Settings → Devices & services → Add Integration** and add **Bambu Lab P1 - Spaghetti Detection** integration.
 
@@ -119,7 +138,7 @@ restarting Home Assistant, add and configure the integration through the native 
 
 1. Click the button below to import the Spaghetti Detection blueprint:
 
-[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/nberktumer/ha-bambu-lab-p1-spaghetti-detection/blob/main/blueprints/spaghetti_detection.yaml)
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/mvso/ha-bambu-lab-p1-spaghetti-detection/blob/main/blueprints/spaghetti_detection.yaml)
 
 2. Go to the imported blueprint and create the automation:
 
@@ -132,7 +151,7 @@ restarting Home Assistant, add and configure the integration through the native 
 | ---- | ----- |
 | **Home Assistant Host** | The address of your Home Assistant instance. Required for sending the printer camera image to the Obico ML server. Ensure to include your Home Assistant port. This address is also used for notification images. If you wish to view failure images on notifications outside your local network, provide a publicly accessible link here.
 | **Obico ML API Host** | The URL of the Obico ML Server. The default port number is `3333`. If you installed the ML server via the Home Assistant Addon, the IP address should match your Home Assistant address.
-| **Obico ML API Auth Token** | The authentication token for the Obico ML Server. The default value is `obico_api_secret` and can be configured through the addon settings or the docker container create command.
+| **Obico ML API Auth Token** | The authentication token for the Obico ML Server. Use the secret you configured in the addon settings or with `ML_API_TOKEN` for the docker container. There is no default value.
 | **Notification Settings**   | - **Critical Notification:** Generates an audible alert even when your device is in silent mode.<br/>- **Standard Notification:** Sends a traditional notification respecting your device's audio settings.<br/>- **None:** No notifications are sent in case of a failure.
 | **Notification Service**  | The notification service of your choice for selecting a single device or a group of devices, instead of alerting all mobile devices registered in home assistant. The default is `notify.notify`, which notifies all devices.
 

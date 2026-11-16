@@ -1,3 +1,15 @@
+### V1.1.1
+
+> ### Breaking Change
+> The ML server no longer has a default secret and rejects the old value `obico_api_secret`. Set a secret of your own
+> in the addon configuration (or `ML_API_TOKEN` for docker) and enter the same value in the automation.
+
+- The configured secret is now actually enforced by the addon.
+- The addon and the standalone container are built from this repository instead of prebuilt images, with pinned
+  Darknet sources and checksum-verified model weights.
+- Updated Python dependencies, and the server no longer runs as root.
+- The server only fetches `http`/`https` images of at most 20 MB.
+
 ### V1.1.0
 
 > ### Breaking Change
