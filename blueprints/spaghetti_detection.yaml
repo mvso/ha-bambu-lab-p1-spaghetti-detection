@@ -57,7 +57,9 @@ blueprint:
               value: none
     failure_action:
       name: On Failure Action
-      description: What to do after detecting a failure
+      description: >-
+        What to do after detecting a failure. Pause and Stop need the matching printer button entity below,
+        without it only the notification is sent.
       default: pause
       selector:
         select:
@@ -104,7 +106,11 @@ blueprint:
             - domain: camera
     printer_pause_button:
       name: Printer Pause Button Entity
-      description: Bambu Lab printer pause button entity
+      description: >-
+        Bambu Lab printer pause button entity. Optional: leave it empty if the Bambu Lab
+        integration does not provide control buttons for your printer (newer firmware without Developer LAN Mode).
+        Detection and notifications work without it.
+      default: []
       selector:
         entity:
           filter:
@@ -112,7 +118,11 @@ blueprint:
               domain: button
     printer_resume_button:
       name: Printer Resume Button Entity
-      description: Bambu Lab printer resume button entity
+      description: >-
+        Bambu Lab printer resume button entity. Optional: leave it empty if the Bambu Lab
+        integration does not provide control buttons for your printer (newer firmware without Developer LAN Mode).
+        Detection and notifications work without it.
+      default: []
       selector:
         entity:
           filter:
@@ -120,7 +130,11 @@ blueprint:
               domain: button
     printer_stop_button:
       name: Printer Stop Button Entity
-      description: Bambu Lab printer stop button entity
+      description: >-
+        Bambu Lab printer stop button entity. Optional: leave it empty if the Bambu Lab
+        integration does not provide control buttons for your printer (newer firmware without Developer LAN Mode).
+        Detection and notifications work without it.
+      default: []
       selector:
         entity:
           filter:
@@ -141,6 +155,14 @@ variables:
   FAILURE_ACTION_VAR: !input failure_action
   NOTIFICATION_SETTINGS_VAR: !input notification_settings
   DETECTION_FREQUENCY_VAR: !input detection_frequency
+  # The printer control buttons are optional, an unset one is an empty list
+  PAUSE_BUTTON_VAR: !input printer_pause_button
+  RESUME_BUTTON_VAR: !input printer_resume_button
+  STOP_BUTTON_VAR: !input printer_stop_button
+  # Only offer the notification actions that have a button to press
+  NOTIFICATION_ACTIONS_VAR: >-
+    {{ ([{'action': 'BAMBU_LAB_RESUME_PRINTING', 'title': 'Resume Printing'}] if (RESUME_BUTTON_VAR or '') | length > 0 else [])
+       + ([{'action': 'BAMBU_LAB_STOP_PRINTING', 'title': 'Stop Printing'}] if (STOP_BUTTON_VAR or '') | length > 0 else []) }}
 mode: single
 max_exceeded: silent
 trigger:
@@ -219,6 +241,8 @@ action:
                   - condition: trigger
                     id:
                       - BAMBU_LAB_PAUSE_PRINTING
+                  - condition: template
+                    value_template: "{{ (PAUSE_BUTTON_VAR or '') | length > 0 }}"
                 sequence:
                   - service: button.press
                     data: { }
@@ -227,6 +251,8 @@ action:
               - conditions:
                   - condition: trigger
                     id: BAMBU_LAB_RESUME_PRINTING
+                  - condition: template
+                    value_template: "{{ (RESUME_BUTTON_VAR or '') | length > 0 }}"
                 sequence:
                   - service: button.press
                     data: { }
@@ -235,6 +261,8 @@ action:
               - conditions:
                   - condition: trigger
                     id: BAMBU_LAB_STOP_PRINTING
+                  - condition: template
+                    value_template: "{{ (STOP_BUTTON_VAR or '') | length > 0 }}"
                 sequence:
                   - service: button.press
                     data: { }
@@ -423,7 +451,7 @@ action:
           - choose:
               - conditions:
                   - condition: template
-                    value_template: "{{ FAILURE_ACTION_VAR == 'pause' }}"
+                    value_template: "{{ FAILURE_ACTION_VAR == 'pause' and (PAUSE_BUTTON_VAR or '') | length > 0 }}"
                 sequence:
                   - service: button.press
                     data: { }
@@ -431,7 +459,7 @@ action:
                       entity_id: !input printer_pause_button
               - conditions:
                   - condition: template
-                    value_template: "{{ FAILURE_ACTION_VAR == 'stop' }}"
+                    value_template: "{{ FAILURE_ACTION_VAR == 'stop' and (STOP_BUTTON_VAR or '') | length > 0 }}"
                 sequence:
                   - service: button.press
                     data: { }
@@ -457,11 +485,7 @@ action:
                             name: default
                             critical: 1
                             volume: 0.75
-                        actions:
-                          - action: BAMBU_LAB_RESUME_PRINTING
-                            title: Resume Printing
-                          - action: BAMBU_LAB_STOP_PRINTING
-                            title: Stop Printing
+                        actions: "{{ NOTIFICATION_ACTIONS_VAR }}"
               - conditions:
                   - condition: template
                     value_template: "{{ NOTIFICATION_SETTINGS_VAR == 'standard' }}"
@@ -472,11 +496,7 @@ action:
                       message: "Confidence: {{ (states('number.bambu_lab_p1_spaghetti_detection_normalized_p') | float * 100) | int }}%"
                       data:
                         image: "{{ HOME_ASSISTANT_HOST_VAR }}{{ state_attr(PRINTER_CAMERA_VAR, 'entity_picture') }}"
-                        actions:
-                          - action: BAMBU_LAB_RESUME_PRINTING
-                            title: Resume Printing
-                          - action: BAMBU_LAB_STOP_PRINTING
-                            title: Stop Printing
+                        actions: "{{ NOTIFICATION_ACTIONS_VAR }}"
           - service: number.set_value
             data:
               value: 0
