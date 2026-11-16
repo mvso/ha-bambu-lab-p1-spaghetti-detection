@@ -161,30 +161,37 @@ restarting Home Assistant, add and configure the integration through the native 
 | **Notification Service**  | The notification service of your choice for selecting a single device or a group of devices, instead of alerting all mobile devices registered in home assistant. The default is `notify.notify`, which notifies all devices.
 
 
-## 4. Add the Printer Dashboard (optional)
+## 4. Printer Dashboard
 
-[`dashboards/printer_dashboard.yaml`](dashboards/printer_dashboard.yaml) is a ready-made dashboard with two views:
+The integration adds a dashboard called **3D printer** to the sidebar. There is nothing to configure: it finds the
+entities of your Bambu Lab printer on its own, also when they have been renamed, and only shows what your printer
+actually has.
 
 - **Printer**: camera, print progress, temperatures, printer status and the spaghetti detection values.
-- **Filament**: the AMS slots with colour, filament, type and remaining amount, the external spool and the AMS climate.
+- **Filament**: every AMS with the colour, filament, type and remaining amount of each slot, the external spool and the
+  AMS climate. This view is left out when the printer has neither.
 
-It only uses built-in Home Assistant cards. The labels are in Norwegian and can be changed in the file.
+The dashboard is rebuilt each time it is opened, so a new AMS or a second printer shows up after reloading the page. It
+is read-only and uses English or Norwegian labels depending on the language of Home Assistant.
 
-1. Find the prefix of your printer's entity IDs under **Settings → Devices & services → Bambu Lab**. For
-   `sensor.p1s_01p00a123456789_print_status` the prefix is `p1s_01p00a123456789`.
+The values in the spaghetti detection card are maintained by the automation, so do not change them by hand.
 
-2. Copy the contents of [`dashboards/printer_dashboard.yaml`](dashboards/printer_dashboard.yaml) and replace every
-   `SKRIVER` with that prefix, for example with search and replace in a text editor.
+### Making your own editable copy
+
+If you want to change the dashboard, or it does not appear in the sidebar:
+
+1. Go to **Developer tools → Actions**, select **Bambu Lab P1 - Spaghetti Detection: Generate printer dashboard** and
+   click **Perform action**.
+
+2. Copy the whole response.
 
 3. Go to **Settings → Dashboards → Add dashboard → New dashboard from scratch** and open the new dashboard.
 
-4. Click the pencil, then **⋮ → Raw configuration editor**, replace everything with the edited contents and save.
+4. Click the pencil, then **⋮ → Raw configuration editor**, replace everything with the copied response and save.
 
-Cards that show **Entity not found** refer to something your printer does not have, such as an AMS or the AMS
-temperature sensor. Remove those entries, or pick the right entity in the card editor. For a second AMS, copy the AMS
-card and change `ams_1` to `ams_2`.
-
-The values in the spaghetti detection card are maintained by the automation, so do not change them by hand.
+Home Assistant has no official way for an integration to add a dashboard, so the automatic one relies on internals that
+can change between Home Assistant releases. If that happens the integration keeps working and logs a warning, and the
+action above still gives you the dashboard.
 
 ## Credits
 

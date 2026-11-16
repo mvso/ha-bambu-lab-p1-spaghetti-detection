@@ -1,3 +1,9 @@
+### V1.2.0
+
+- The integration adds a printer dashboard to the sidebar, with the camera, print progress, temperatures, AMS and
+  filament. The entities of your printer are found automatically.
+- New `generate_dashboard` action that returns the same dashboard for pasting into a dashboard of your own.
+
 ### V1.1.1
 
 > ### Breaking Change

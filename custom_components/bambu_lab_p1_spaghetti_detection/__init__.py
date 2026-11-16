@@ -14,6 +14,12 @@ LOGGER = logging.getLogger(__package__)
 
 PLATFORMS = [Platform.NUMBER, Platform.DATETIME]
 
+from .dashboard import (
+    async_register_dashboard,
+    async_unregister_dashboard,
+    build_dashboard_config,
+)
+
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 SPAGHETTI_DETECTION_SCHEMA = vol.Schema({
@@ -63,9 +69,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         supports_response=SupportsResponse.ONLY
     )
 
+    async def generate_dashboard_handler(call: ServiceCall) -> ServiceResponse:
+        """Return the printer dashboard, ready to paste into a dashboard's raw configuration editor."""
+        return build_dashboard_config(hass)
+
+    hass.services.async_register(
+        DOMAIN,
+        "generate_dashboard",
+        generate_dashboard_handler,
+        supports_response=SupportsResponse.ONLY
+    )
+
+    # Adds the generated printer dashboard to the sidebar. Failing to do so is
+    # not fatal, the generate_dashboard action covers that case.
+    async_register_dashboard(hass)
+
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload Bambu Lab P1 - Spaghetti Detection integration."""
+    async_unregister_dashboard(hass)
+    hass.services.async_remove(DOMAIN, "generate_dashboard")
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
