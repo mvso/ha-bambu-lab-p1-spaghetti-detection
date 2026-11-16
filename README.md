@@ -161,6 +161,38 @@ restarting Home Assistant, add and configure the integration through the native 
 | **Notification Service**  | The notification service of your choice for selecting a single device or a group of devices, instead of alerting all mobile devices registered in home assistant. The default is `notify.notify`, which notifies all devices.
 
 
+## 4. Printer Dashboard
+
+The integration adds a dashboard called **3D printer** to the sidebar. There is nothing to configure: it finds the
+entities of your Bambu Lab printer on its own, also when they have been renamed, and only shows what your printer
+actually has.
+
+- **Printer**: camera, print progress, temperatures, printer status and the spaghetti detection values.
+- **Filament**: every AMS with the colour, filament, type and remaining amount of each slot, the external spool and the
+  AMS climate. This view is left out when the printer has neither.
+
+The dashboard is rebuilt each time it is opened, so a new AMS or a second printer shows up after reloading the page. It
+is read-only and uses English or Norwegian labels depending on the language of Home Assistant.
+
+The values in the spaghetti detection card are maintained by the automation, so do not change them by hand.
+
+### Making your own editable copy
+
+If you want to change the dashboard, or it does not appear in the sidebar:
+
+1. Go to **Developer tools → Actions**, select **Bambu Lab P1 - Spaghetti Detection: Generate printer dashboard** and
+   click **Perform action**.
+
+2. Copy the whole response.
+
+3. Go to **Settings → Dashboards → Add dashboard → New dashboard from scratch** and open the new dashboard.
+
+4. Click the pencil, then **⋮ → Raw configuration editor**, replace everything with the copied response and save.
+
+Home Assistant has no official way for an integration to add a dashboard, so the automatic one relies on internals that
+can change between Home Assistant releases. If that happens the integration keeps working and logs a warning, and the
+action above still gives you the dashboard.
+
 ## Credits
 
 - **Greg Hesp ([@greghesp](https://github.com/greghesp))**: https://github.com/greghesp/ha-bambulab

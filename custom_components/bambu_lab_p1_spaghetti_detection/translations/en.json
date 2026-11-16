@@ -17,6 +17,10 @@
           "description": "Image URL"
         }
       }
+    },
+    "generate_dashboard": {
+      "name": "Generate printer dashboard",
+      "description": "Returns the printer dashboard with the entities of your printer filled in, ready to paste into a dashboard's raw configuration editor."
     }
   }
 }
