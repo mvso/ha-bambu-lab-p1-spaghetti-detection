@@ -4,6 +4,8 @@ declare ML_API_TOKEN
 declare PORT
 
 ML_API_TOKEN=$(bashio::config 'obico_api_secret')
+# gunicorn reads the token from its environment, so it has to be exported
+export ML_API_TOKEN
 
 cd /app
 FLASK_APP=server.py venv/bin/gunicorn --bind "0.0.0.0:3333" --workers 1 wsgi:application
