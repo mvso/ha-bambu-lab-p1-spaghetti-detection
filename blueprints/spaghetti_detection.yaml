@@ -13,8 +13,9 @@ blueprint:
       default: "http://192.168.1.123:3333"
     obico_auth_token:
       name: Obico ML API Auth Token
-      description: Obico ML API authentication token
-      default: "obico_api_secret"
+      description: >-
+        Obico ML API authentication token. Use the same secret you configured on the ML server.
+        The old default value "obico_api_secret" is no longer accepted by the server.
     detection_frequency:
       name: Detection Frequency
       description: The detection algorithm will run in every defined seconds

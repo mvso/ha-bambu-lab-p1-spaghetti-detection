@@ -6,9 +6,9 @@
   ],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/nberktumer/ha-bambu-lab-p1-spaghetti-detection",
+  "documentation": "https://github.com/mvso/ha-bambu-lab-p1-spaghetti-detection",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/nberktumer/ha-bambu-lab-p1-spaghetti-detection/issues",
-  "version": "1.0.0"
+  "version": "1.0.1"
 }
 
