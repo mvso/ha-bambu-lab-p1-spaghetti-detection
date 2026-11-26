@@ -70,6 +70,16 @@ LABELS = {
         "in_use": "Filament in use",
         "in_extruder": "Filament in extruder",
         "usage": "Filament used (this job)",
+        "pe_status": "Status: ",
+        "pe_progress": "Progress: ",
+        "pe_layer": "Layer: ",
+        "pe_bed": "Bed: ",
+        "pe_nozzle": "Nozzle: ",
+        "pe_speed": "Speed: ",
+        "pe_ams_temp": "AMS temp: ",
+        "pe_ams_humidity": "AMS humidity: ",
+        "pe_remaining": "Remaining: ",
+        "pe_end": "Done: ",
         "no_printer": (
             "No Bambu Lab printer was found. Install and set up the Bambu Lab "
             "integration, then reload this page."
@@ -120,6 +130,16 @@ LABELS = {
         "in_use": "Filament i bruk",
         "in_extruder": "Filament i ekstruder",
         "usage": "Filamentforbruk (denne jobben)",
+        "pe_status": "Status: ",
+        "pe_progress": "Fremdrift: ",
+        "pe_layer": "Lag: ",
+        "pe_bed": "Seng: ",
+        "pe_nozzle": "Dyse: ",
+        "pe_speed": "Hastighet: ",
+        "pe_ams_temp": "AMS temp: ",
+        "pe_ams_humidity": "AMS fukt: ",
+        "pe_remaining": "Gjenstår: ",
+        "pe_end": "Ferdig: ",
         "no_printer": (
             "Fant ingen Bambu Lab-printer. Installer og sett opp Bambu Lab-"
             "integrasjonen, og last deretter siden på nytt."
@@ -146,6 +166,7 @@ class _Printer:
     def __init__(self, hass: HomeAssistant, entry) -> None:
         self.serial: str = entry.data.get("serial", "")
         self.name: str = entry.title or self.serial
+        self.device_type: str = entry.data.get("device_type", "")
         registry = er.async_get(hass)
         self.entities = [
             entity
@@ -263,22 +284,170 @@ def _detection_cards(hass: HomeAssistant, labels: dict[str, str]) -> list[dict[s
     return [{"type": "vertical-stack", "cards": cards}]
 
 
-def _printer_view(
-    hass: HomeAssistant, printer: _Printer, labels: dict[str, str], suffix: str, path: str
+def _blueprint_inputs(hass: HomeAssistant, camera: str | None) -> dict[str, Any]:
+    """Return the inputs of the spaghetti detection automation that belongs to a printer.
+
+    The power plug and the second camera are set in the blueprint, so the dashboard reads
+    them from there. The automation is recognised by its inputs, not by where the blueprint
+    was imported to, and with several of them the one using the printer's camera is chosen.
+    Anything unexpected gives no inputs, and the dashboard is then built without them.
+    """
+    try:
+        from homeassistant.components.automation import DATA_COMPONENT
+
+        component = hass.data.get(DATA_COMPONENT)
+        found: list[dict[str, Any]] = []
+        for entity in list(component.entities) if component is not None else []:
+            raw = getattr(entity, "raw_config", None) or {}
+            use = raw.get("use_blueprint")
+            inputs = use.get("input") if isinstance(use, dict) else None
+            if isinstance(inputs, dict) and "obico_host" in inputs and "printer_camera" in inputs:
+                found.append(inputs)
+    except Exception:  # noqa: BLE001 - the dashboard must never break because of this
+        _LOGGER.debug("Could not read the automation inputs", exc_info=True)
+        return {}
+
+    for inputs in found:
+        if camera and inputs.get("printer_camera") == camera:
+            return inputs
+    return found[0] if len(found) == 1 else {}
+
+
+def _input_entity(inputs: dict[str, Any], key: str) -> str | None:
+    """Return an optional entity input, which is an empty list when it is not set."""
+    value = inputs.get(key)
+    return value if isinstance(value, str) and value else None
+
+
+def _entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
+    return (
+        hass.states.get(entity_id) is not None
+        or er.async_get(hass).async_get(entity_id) is not None
+    )
+
+
+def _entity_usable(hass: HomeAssistant, entity_id: str) -> bool:
+    state = hass.states.get(entity_id)
+    return state is not None and state.state != "unavailable"
+
+
+def _state_icon(entity_id: str | None, icon: str, color: str, position: dict[str, str], **extra) -> list:
+    if not entity_id:
+        return []
+    return [
+        {
+            "type": "state-icon",
+            "entity": entity_id,
+            "icon": icon,
+            **extra,
+            "style": {**position, "color": color, "filter": "drop-shadow(0 0 2px black)"},
+        }
+    ]
+
+
+def _overview_card(
+    hass: HomeAssistant, printer: _Printer, labels: dict[str, str], background: str
 ) -> dict[str, Any]:
+    """Camera picture with the printer's key values laid over it."""
+    units = printer.ams_units(hass)
+    ams = units[0] if units else {}
+
+    elements: list[dict[str, Any]] = []
+    elements += _state_icon(
+        printer.get("binary_sensor", "print_error"), "mdi:alert-circle", "red",
+        {"top": "3%", "right": "12%"},
+    )
+    elements += _state_icon(
+        printer.get("binary_sensor", "hms"), "mdi:tools", "orange",
+        {"top": "3%", "right": "2%"},
+    )
+    elements += _state_icon(
+        printer.get("light", "chamber_light") or printer.get("light", "camera_light"),
+        "mdi:lightbulb", "white", {"bottom": "2%", "right": "2%"},
+        tap_action={"action": "toggle"},
+    )
+
+    # (entity, prefix, font size, extra style). Missing entities are left out and the rest moves up.
+    name_style = {
+        "max-width": "65%", "white-space": "nowrap", "overflow": "hidden", "text-overflow": "ellipsis",
+    }
+    rows = (
+        (printer.get("sensor", "subtask_name"), None, "10px", name_style),
+        (printer.get("sensor", "print_status"), labels["pe_status"], "11px", {}),
+        (printer.get("sensor", "print_progress"), labels["pe_progress"], "11px", {}),
+        (printer.get("sensor", "current_layer"), labels["pe_layer"], "11px", {}),
+        (printer.get("sensor", "bed_temp"), labels["pe_bed"], "11px", {}),
+        (printer.get("sensor", "nozzle_temp"), labels["pe_nozzle"], "11px", {}),
+        (printer.get("sensor", "speed_profile"), labels["pe_speed"], "11px", {}),
+        (ams.get("temperature"), labels["pe_ams_temp"], "11px", {}),
+        (ams.get("humidity"), labels["pe_ams_humidity"], "11px", {}),
+        (printer.get("sensor", "remaining_time"), labels["pe_remaining"], "11px", {}),
+        (printer.get("sensor", "end_time"), labels["pe_end"], "9px", {}),
+    )
+    position = 0
+    for entity_id, prefix, font_size, extra_style in rows:
+        if not entity_id:
+            continue
+        element: dict[str, Any] = {
+            "type": "state-label",
+            "entity": entity_id,
+            "style": {
+                "top": f"{3 + 8 * position}%",
+                "left": "1%",
+                "transform": "translate(0%, -50%)",
+                "color": "white",
+                "background": "rgba(0,0,0,0.6)",
+                "padding": "2px 6px",
+                "border-radius": "4px",
+                "font-size": font_size,
+                **extra_style,
+            },
+        }
+        if prefix:
+            element["prefix"] = prefix
+        elements.append(element)
+        position += 1
+
+    return {
+        "type": "picture-elements",
+        "camera_image": background,
+        "camera_view": "live",
+        "title": printer.device_type or labels["printer"],
+        "elements": elements,
+    }
+
+
+def _printer_view(
+    hass: HomeAssistant,
+    printer: _Printer,
+    labels: dict[str, str],
+    suffix: str,
+    path: str,
+) -> dict[str, Any]:
+    """Build the printer view as sections, laid out from left to right.
+
+    The leftmost cards are the power plug history and the overview picture. The plug and the
+    second camera for the overview are the optional inputs of the blueprint.
+    """
     cards: list[dict[str, Any]] = []
 
     camera = printer.get("camera", "camera") or printer.get("image", "p1p_camera")
-    if camera:
-        card = {
-            "type": "picture-entity",
-            "entity": camera,
-            "show_name": False,
-            "show_state": False,
-        }
-        if camera.startswith("camera."):
-            card["camera_view"] = "live"
-        cards.append(card)
+    if camera and camera.startswith("camera."):
+        cards.append(
+            {
+                "type": "picture-entity",
+                "entity": camera,
+                "camera_image": camera,
+                "camera_view": "live",
+                "show_name": True,
+                "show_state": True,
+                "fit_mode": "fill",
+            }
+        )
+    elif camera:
+        cards.append(
+            {"type": "picture-entity", "entity": camera, "show_name": False, "show_state": False}
+        )
 
     job: list[dict[str, Any]] = []
     progress = printer.get("sensor", "print_progress")
@@ -334,11 +503,39 @@ def _printer_view(
 
     cards.extend(_detection_cards(hass, labels))
 
+    inputs = _blueprint_inputs(hass, camera)
+    leading: list[dict[str, Any]] = []
+
+    plug = _input_entity(inputs, "printer_power_switch")
+    if plug and _entity_exists(hass, plug):
+        leading.append(
+            {
+                "type": "vertical-stack",
+                "cards": [
+                    {"type": "entities", "entities": [{"entity": plug}], "state_color": True},
+                    {"type": "history-graph", "entities": [{"entity": plug}]},
+                ],
+            }
+        )
+
+    # The second camera is preferred as the picture behind the overview. The printer's own camera
+    # is used when there is none or it is unavailable.
+    second_camera = _input_entity(inputs, "printer_camera_2")
+    background = (
+        second_camera
+        if second_camera and _entity_usable(hass, second_camera)
+        else (camera if camera and camera.startswith("camera.") else None)
+    )
+    if background:
+        leading.append(_overview_card(hass, printer, labels, background))
+
     return {
         "title": f"{labels['printer']}{suffix}",
         "path": path,
         "icon": DASHBOARD_ICON,
-        "cards": cards,
+        "type": "sections",
+        "max_columns": 4,
+        "sections": [{"type": "grid", "cards": [card]} for card in leading + cards],
     }
 
 
@@ -415,7 +612,7 @@ def build_dashboard_config(hass: HomeAssistant) -> dict[str, Any]:
         suffix = f" – {printer.name}" if len(printers) > 1 else ""
         path_suffix = f"-{index}" if len(printers) > 1 else ""
         printer_view = _printer_view(hass, printer, labels, suffix, f"printer{path_suffix}")
-        if printer_view["cards"]:
+        if printer_view["sections"]:
             views.append(printer_view)
         filament_view = _filament_view(hass, printer, labels, suffix, f"filament{path_suffix}")
         if filament_view:

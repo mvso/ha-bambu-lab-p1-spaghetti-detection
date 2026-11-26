@@ -157,6 +157,8 @@ restarting Home Assistant, add and configure the integration through the native 
 | **Obico ML API Host** | The URL of the Obico ML Server. The default port number is `3333`. If you installed the ML server via the Home Assistant Addon, the IP address should match your Home Assistant address.
 | **Obico ML API Auth Token** | The authentication token for the Obico ML Server. Use the secret you configured in the addon settings or with `ML_API_TOKEN` for the docker container. There is no default value.
 | **Printer Pause / Resume / Stop Button Entity** | Optional. Newer printer firmware without Developer LAN Mode does not let the Bambu Lab integration control the printer, and these buttons are then missing. Leave the fields empty to only get notified on a failure.
+| **Printer Power Switch** | Optional. The smart plug or switch that powers the printer. It is shown with its history on the printer dashboard, and the automation does not use it.
+| **Second Camera Entity** | Optional. A second camera, for example one that sees the print from the side or from above. Both cameras are analysed every round and the highest detection score is used, so a failure that either of them sees is caught, and the notification shows the picture of the camera with the highest score. If one of the cameras fails, the other one is still used. Two cameras means twice as many images for the ML server, so consider a longer **Detection Frequency**. It is also the picture behind the overview on the dashboard. Leave it empty to only use the printer camera.
 | **Notification Settings**   | - **Critical Notification:** Generates an audible alert even when your device is in silent mode.<br/>- **Standard Notification:** Sends a traditional notification respecting your device's audio settings.<br/>- **None:** No notifications are sent in case of a failure.
 | **Notification Service**  | The notification service of your choice for selecting a single device or a group of devices, instead of alerting all mobile devices registered in home assistant. The default is `notify.notify`, which notifies all devices.
 
@@ -167,9 +169,17 @@ The integration adds a dashboard called **3D printer** to the sidebar. There is 
 entities of your Bambu Lab printer on its own, also when they have been renamed, and only shows what your printer
 actually has.
 
-- **Printer**: camera, print progress, temperatures, printer status and the spaghetti detection values.
+- **Printer**: laid out in columns from left to right. First an overview picture of the printer camera with the job,
+  status, progress, layer, temperatures, speed, AMS values and remaining time laid over it, then the camera, print
+  progress, temperatures, printer status and the spaghetti detection values.
 - **Filament**: every AMS with the colour, filament, type and remaining amount of each slot, the external spool and the
   AMS climate. This view is left out when the printer has neither.
+
+Two of the cards come from optional inputs in the blueprint, so there is nothing to edit in the code. The dashboard
+reads them from your automation: **Printer Power Switch** adds a card with the history of the smart plug, placed
+furthest to the left, and **Second Camera Entity** is used as the picture behind the overview, with the printer's own
+camera as the fallback when it is unavailable. Leave them empty and the cards are left out. A change in the automation
+shows up the next time the dashboard is opened.
 
 The dashboard is rebuilt each time it is opened, so a new AMS or a second printer shows up after reloading the page. It
 is read-only and uses English or Norwegian labels depending on the language of Home Assistant.

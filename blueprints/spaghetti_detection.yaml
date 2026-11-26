@@ -104,6 +104,28 @@ blueprint:
         entity:
           filter:
             - domain: camera
+    printer_camera_2:
+      name: Second Camera Entity
+      description: >-
+        Optional. A second camera, for example one that sees the print from the side or from above. Both cameras
+        are analysed and the highest detection score is used, so a failure that either of them sees is caught.
+        If one of the cameras fails, the other one is still used. Leave it empty to only use the printer camera.
+        Two cameras means twice as many images for the ML server, so consider a longer Detection Frequency.
+      default: []
+      selector:
+        entity:
+          filter:
+            - domain: camera
+    printer_power_switch:
+      name: Printer Power Switch
+      description: >-
+        Optional. The smart plug or switch that powers the printer. It is shown with its history on the printer
+        dashboard of the integration, and the automation does not use it.
+      default: []
+      selector:
+        entity:
+          filter:
+            - domain: switch
     printer_pause_button:
       name: Printer Pause Button Entity
       description: >-
@@ -152,6 +174,8 @@ blueprint:
 variables:
   HOME_ASSISTANT_HOST_VAR: !input home_assistant_host
   PRINTER_CAMERA_VAR: !input printer_camera
+  # The second camera is optional, an unset one is an empty list
+  CAMERA_2_VAR: !input printer_camera_2
   FAILURE_ACTION_VAR: !input failure_action
   NOTIFICATION_SETTINGS_VAR: !input notification_settings
   DETECTION_FREQUENCY_VAR: !input detection_frequency
@@ -301,16 +325,56 @@ action:
                 target:
                   entity_id:
                     - !input printer_chamber_light
-          - service: bambu_lab_p1_spaghetti_detection.predict
-            data:
-              obico_host: !input obico_host
-              obico_auth_token: !input obico_auth_token
-              image_url: "{{ HOME_ASSISTANT_HOST_VAR }}{{ state_attr(PRINTER_CAMERA_VAR, 'entity_picture') }}"
-            response_variable: result
+          # DETECTION_SCORE is the sum of the detection confidences of one image. IMAGE_CAMERA_VAR is the
+          # camera whose picture is used in the notification.
+          - choose:
+              # Two cameras: both are analysed and the highest score counts. A camera that fails is skipped
+              # as long as the other one works.
+              - conditions:
+                  - condition: template
+                    value_template: "{{ (CAMERA_2_VAR or '') | length > 0 }}"
+                sequence:
+                  - service: bambu_lab_p1_spaghetti_detection.predict
+                    data:
+                      obico_host: !input obico_host
+                      obico_auth_token: !input obico_auth_token
+                      image_url: "{{ HOME_ASSISTANT_HOST_VAR }}{{ state_attr(PRINTER_CAMERA_VAR, 'entity_picture') }}"
+                    response_variable: result
+                    continue_on_error: true
+                  - service: bambu_lab_p1_spaghetti_detection.predict
+                    data:
+                      obico_host: !input obico_host
+                      obico_auth_token: !input obico_auth_token
+                      image_url: "{{ HOME_ASSISTANT_HOST_VAR }}{{ state_attr(CAMERA_2_VAR, 'entity_picture') }}"
+                    response_variable: result_2
+                    continue_on_error: true
+                  - variables:
+                      SCORE_1: "{{ (result.result.detections | map(attribute=1) | sum | float) if result is defined else none }}"
+                      SCORE_2: "{{ (result_2.result.detections | map(attribute=1) | sum | float) if result_2 is defined else none }}"
+                  - if:
+                      - condition: template
+                        value_template: "{{ SCORE_1 is none and SCORE_2 is none }}"
+                    then:
+                      - stop: Could not analyse the picture of any of the cameras
+                        error: true
+                  - variables:
+                      DETECTION_SCORE: "{{ [SCORE_1, SCORE_2] | reject('none') | max }}"
+                      IMAGE_CAMERA_VAR: >-
+                        {{ CAMERA_2_VAR if SCORE_2 is not none and (SCORE_1 is none or SCORE_2 > SCORE_1) else PRINTER_CAMERA_VAR }}
+            default:
+              - service: bambu_lab_p1_spaghetti_detection.predict
+                data:
+                  obico_host: !input obico_host
+                  obico_auth_token: !input obico_auth_token
+                  image_url: "{{ HOME_ASSISTANT_HOST_VAR }}{{ state_attr(PRINTER_CAMERA_VAR, 'entity_picture') }}"
+                response_variable: result
+              - variables:
+                  DETECTION_SCORE: "{{ result.result.detections | map(attribute=1) | sum | float }}"
+                  IMAGE_CAMERA_VAR: "{{ PRINTER_CAMERA_VAR }}"
 
           - service: number.set_value
             data:
-              value: "{{ result.result.detections | map(attribute=1) | sum | float }}"
+              value: "{{ DETECTION_SCORE }}"
             target:
               entity_id: number.bambu_lab_p1_spaghetti_detection_p_sum
 
@@ -476,7 +540,7 @@ action:
                       title: "Bambu Lab - Spaghetti Detected"
                       message: "Confidence: {{ (states('number.bambu_lab_p1_spaghetti_detection_normalized_p') | float * 100) | int }}%"
                       data:
-                        image: "{{ HOME_ASSISTANT_HOST_VAR }}{{ state_attr(PRINTER_CAMERA_VAR, 'entity_picture') }}"
+                        image: "{{ HOME_ASSISTANT_HOST_VAR }}{{ state_attr(IMAGE_CAMERA_VAR, 'entity_picture') }}"
                         ttl: 0
                         priority: high
                         channel: alarm_stream
@@ -495,7 +559,7 @@ action:
                       title: "Bambu Lab - Spaghetti Detected"
                       message: "Confidence: {{ (states('number.bambu_lab_p1_spaghetti_detection_normalized_p') | float * 100) | int }}%"
                       data:
-                        image: "{{ HOME_ASSISTANT_HOST_VAR }}{{ state_attr(PRINTER_CAMERA_VAR, 'entity_picture') }}"
+                        image: "{{ HOME_ASSISTANT_HOST_VAR }}{{ state_attr(IMAGE_CAMERA_VAR, 'entity_picture') }}"
                         actions: "{{ NOTIFICATION_ACTIONS_VAR }}"
           - service: number.set_value
             data:

@@ -1,3 +1,17 @@
+### V1.4.0
+
+- The power plug card and the picture behind the dashboard overview now come from the blueprint's new optional inputs
+  Printer Power Switch and Second Camera Entity, instead of fixed entities in the code.
+- The blueprint has an optional second camera. Both cameras are analysed and the highest detection score counts. If one
+  camera fails the other one is still used, and the notification shows the picture of the camera with the highest score.
+- Tests that run the blueprint's detection steps against fake services.
+
+### V1.3.0
+
+- The printer view of the dashboard is now laid out in sections from left to right, with an overview picture of the
+  camera and the key values of the printer first.
+- Optional cards for a power plug and an external camera, shown only when those entities exist.
+
 ### V1.2.0
 
 - The integration adds a printer dashboard to the sidebar, with the camera, print progress, temperatures, AMS and
