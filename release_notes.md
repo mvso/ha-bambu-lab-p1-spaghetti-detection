@@ -1,3 +1,9 @@
+### V1.3.0
+
+- The printer view of the dashboard is now laid out in sections from left to right, with an overview picture of the
+  camera and the key values of the printer first.
+- Optional cards for a power plug and an external camera, shown only when those entities exist.
+
 ### V1.2.0
 
 - The integration adds a printer dashboard to the sidebar, with the camera, print progress, temperatures, AMS and

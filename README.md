@@ -167,9 +167,17 @@ The integration adds a dashboard called **3D printer** to the sidebar. There is 
 entities of your Bambu Lab printer on its own, also when they have been renamed, and only shows what your printer
 actually has.
 
-- **Printer**: camera, print progress, temperatures, printer status and the spaghetti detection values.
+- **Printer**: laid out in columns from left to right. First an overview picture of the printer camera with the job,
+  status, progress, layer, temperatures, speed, AMS values and remaining time laid over it, then the camera, print
+  progress, temperatures, printer status and the spaghetti detection values.
 - **Filament**: every AMS with the colour, filament, type and remaining amount of each slot, the external spool and the
   AMS climate. This view is left out when the printer has neither.
+
+Two things belong to the setup of this fork's owner and are only shown when the entities exist: a card with the
+history of the power plug `switch.3d_printers_12_socket_1`, placed furthest to the left, and the camera
+`camera.verksted_iphonese` as the picture behind the overview. Without that camera, or when it is unavailable, the
+printer's own camera is used. To use your own, change `POWER_SWITCH_ENTITY` and `EXTERNAL_CAMERA_ENTITY` in
+[`dashboard.py`](custom_components/bambu_lab_p1_spaghetti_detection/dashboard.py).
 
 The dashboard is rebuilt each time it is opened, so a new AMS or a second printer shows up after reloading the page. It
 is read-only and uses English or Norwegian labels depending on the language of Home Assistant.

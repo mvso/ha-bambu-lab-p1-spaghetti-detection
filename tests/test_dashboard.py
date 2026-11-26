@@ -33,6 +33,11 @@ def _all_entities(config: dict) -> set[str]:
     return found
 
 
+def _cards(view: dict) -> list[dict]:
+    """All top-level cards of a sections view, from left to right."""
+    return [card for section in view["sections"] for card in section["cards"]]
+
+
 def _add_printer(hass: HomeAssistant, with_ams: bool = True, with_camera: bool = True) -> MockConfigEntry:
     """Register a printer the way the Bambu Lab integration does, with renamed entities."""
     entry = MockConfigEntry(domain="bambu_lab", title=f"P1S_{SERIAL}", data={"serial": SERIAL})
@@ -114,9 +119,11 @@ async def test_printer_without_ams_or_camera_entity(hass: HomeAssistant) -> None
     _add_printer(hass, with_ams=False, with_camera=False)
     config = build_dashboard_config(hass)
     assert [view["path"] for view in config["views"]] == ["printer"]
-    picture = config["views"][0]["cards"][0]
+    picture = _cards(config["views"][0])[0]
     assert picture["entity"] == "image.min_printer_bilde"
     assert "camera_view" not in picture
+    # The overview picture needs a camera entity, so it is left out here.
+    assert not any(card["type"] == "picture-elements" for card in _cards(config["views"][0]))
 
 
 async def test_no_printer(hass: HomeAssistant) -> None:
@@ -130,7 +137,14 @@ async def test_norwegian_labels(hass: HomeAssistant) -> None:
     _add_printer(hass)
     config = build_dashboard_config(hass)
     assert config["title"] == "3D-printer"
-    assert config["views"][0]["cards"][1]["cards"][0]["name"] == "Fremdrift"
+    gauge = next(
+        card["cards"][0] for card in _cards(config["views"][0])
+        if card["type"] == "vertical-stack" and card["cards"][0]["type"] == "gauge"
+    )
+    assert gauge["name"] == "Fremdrift"
+    overview = next(card for card in _cards(config["views"][0]) if card["type"] == "picture-elements")
+    labels = [e for e in overview["elements"] if e["type"] == "state-label"]
+    assert labels[2]["prefix"] == "Fremdrift: "
 
 
 async def test_dashboard_is_registered_and_served(hass: HomeAssistant, hass_ws_client) -> None:
@@ -163,3 +177,70 @@ async def test_dashboard_is_registered_and_served(hass: HomeAssistant, hass_ws_c
     assert await hass.config_entries.async_unload(entry.entry_id)
     await client.send_json({"id": 3, "type": "get_panels"})
     assert DASHBOARD_URL_PATH not in (await client.receive_json())["result"]
+
+
+async def test_owner_cards_come_first_from_left_to_right(hass: HomeAssistant) -> None:
+    _add_printer(hass)
+    hass.states.async_set("switch.3d_printers_12_socket_1", "on")
+    hass.states.async_set("camera.verksted_iphonese", "idle")
+    view = build_dashboard_config(hass)["views"][0]
+
+    assert view["type"] == "sections"
+    assert view["max_columns"] == 4
+    cards = _cards(view)
+    # Power plug, overview picture, camera, then the generated cards.
+    assert cards[0]["type"] == "vertical-stack"
+    assert cards[0]["cards"][0]["entities"] == [{"entity": "switch.3d_printers_12_socket_1"}]
+    assert cards[0]["cards"][1]["type"] == "history-graph"
+    assert cards[1]["type"] == "picture-elements"
+    assert cards[1]["camera_image"] == "camera.verksted_iphonese"
+    assert cards[1]["title"] == "P1S" or cards[1]["title"] == "Printer"
+    assert cards[2]["type"] == "picture-entity"
+    assert cards[2]["entity"] == "camera.min_printer_kamera"
+    assert cards[2]["fit_mode"] == "fill"
+    # Every card sits in a section of its own.
+    assert all(len(section["cards"]) == 1 for section in view["sections"])
+    # Nothing from the other printer's web page is included.
+    assert "iframe" not in str(view)
+    assert "192.168" not in str(view)
+
+
+async def test_overview_falls_back_to_the_printer_camera(hass: HomeAssistant) -> None:
+    _add_printer(hass)
+    hass.states.async_set("camera.verksted_iphonese", "unavailable")
+    overview = next(
+        card for card in _cards(build_dashboard_config(hass)["views"][0]) if card["type"] == "picture-elements"
+    )
+    assert overview["camera_image"] == "camera.min_printer_kamera"
+
+
+async def test_owner_entities_are_left_out_when_they_do_not_exist(hass: HomeAssistant) -> None:
+    _add_printer(hass)
+    cards = _cards(build_dashboard_config(hass)["views"][0])
+    assert "switch.3d_printers_12_socket_1" not in str(cards)
+    assert "camera.verksted_iphonese" not in str(cards)
+    assert cards[0]["type"] == "picture-elements"
+
+
+async def test_overview_overlay_only_has_existing_entities(hass: HomeAssistant) -> None:
+    _add_printer(hass)
+    overview = next(
+        card for card in _cards(build_dashboard_config(hass)["views"][0]) if card["type"] == "picture-elements"
+    )
+    labels = [e for e in overview["elements"] if e["type"] == "state-label"]
+    # Labels are packed from the top with the same spacing, no gaps for missing entities.
+    assert [e["style"]["top"] for e in labels] == ["3%", "11%", "19%", "27%", "35%", "43%"]
+    assert [e["entity"] for e in labels] == [
+        "sensor.min_printer_subtask_name_omdopt",
+        "sensor.min_printer_print_status_omdopt",
+        "sensor.min_printer_print_progress_omdopt",
+        "sensor.min_printer_bed_temp_omdopt",
+        "sensor.min_printer_nozzle_temp_omdopt",
+        "sensor.min_printer_remaining_time_omdopt",
+    ]
+    assert "prefix" not in labels[0]
+    assert labels[1]["prefix"] == "Status: "
+    icons = {e["entity"]: e for e in overview["elements"] if e["type"] == "state-icon"}
+    assert set(icons) == {"binary_sensor.min_printer_hms", "light.min_printer_lys"}
+    assert icons["light.min_printer_lys"]["tap_action"] == {"action": "toggle"}
+    assert icons["light.min_printer_lys"]["style"]["bottom"] == "2%"
