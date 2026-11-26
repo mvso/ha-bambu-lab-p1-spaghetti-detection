@@ -19,12 +19,6 @@ BAMBU_LAB_DOMAIN = "bambu_lab"
 DASHBOARD_URL_PATH = "bambu-lab-printer"
 DASHBOARD_ICON = "mdi:printer-3d"
 
-# Entities of the owner's own setup. They do not belong to the Bambu Lab integration, so they
-# cannot be looked up like the rest. Each one is only used when it exists, which leaves the
-# dashboard unchanged on every other installation.
-POWER_SWITCH_ENTITY = "switch.3d_printers_12_socket_1"
-EXTERNAL_CAMERA_ENTITY = "camera.verksted_iphonese"
-
 _LOGGER = logging.getLogger(__name__)
 
 _TRAY_KEY = re.compile(r"_(tray_(\d+))$")
@@ -290,6 +284,41 @@ def _detection_cards(hass: HomeAssistant, labels: dict[str, str]) -> list[dict[s
     return [{"type": "vertical-stack", "cards": cards}]
 
 
+def _blueprint_inputs(hass: HomeAssistant, camera: str | None) -> dict[str, Any]:
+    """Return the inputs of the spaghetti detection automation that belongs to a printer.
+
+    The power plug and the second camera are set in the blueprint, so the dashboard reads
+    them from there. The automation is recognised by its inputs, not by where the blueprint
+    was imported to, and with several of them the one using the printer's camera is chosen.
+    Anything unexpected gives no inputs, and the dashboard is then built without them.
+    """
+    try:
+        from homeassistant.components.automation import DATA_COMPONENT
+
+        component = hass.data.get(DATA_COMPONENT)
+        found: list[dict[str, Any]] = []
+        for entity in list(component.entities) if component is not None else []:
+            raw = getattr(entity, "raw_config", None) or {}
+            use = raw.get("use_blueprint")
+            inputs = use.get("input") if isinstance(use, dict) else None
+            if isinstance(inputs, dict) and "obico_host" in inputs and "printer_camera" in inputs:
+                found.append(inputs)
+    except Exception:  # noqa: BLE001 - the dashboard must never break because of this
+        _LOGGER.debug("Could not read the automation inputs", exc_info=True)
+        return {}
+
+    for inputs in found:
+        if camera and inputs.get("printer_camera") == camera:
+            return inputs
+    return found[0] if len(found) == 1 else {}
+
+
+def _input_entity(inputs: dict[str, Any], key: str) -> str | None:
+    """Return an optional entity input, which is an empty list when it is not set."""
+    value = inputs.get(key)
+    return value if isinstance(value, str) and value else None
+
+
 def _entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
     return (
         hass.states.get(entity_id) is not None
@@ -394,12 +423,11 @@ def _printer_view(
     labels: dict[str, str],
     suffix: str,
     path: str,
-    personal: bool = False,
 ) -> dict[str, Any]:
     """Build the printer view as sections, laid out from left to right.
 
-    With personal=True the owner's own cards come first (leftmost): the power
-    plug and the overview picture, when the entities they need exist.
+    The leftmost cards are the power plug history and the overview picture. The plug and the
+    second camera for the overview are the optional inputs of the blueprint.
     """
     cards: list[dict[str, Any]] = []
 
@@ -475,31 +503,31 @@ def _printer_view(
 
     cards.extend(_detection_cards(hass, labels))
 
+    inputs = _blueprint_inputs(hass, camera)
     leading: list[dict[str, Any]] = []
-    if personal:
-        if _entity_exists(hass, POWER_SWITCH_ENTITY):
-            leading.append(
-                {
-                    "type": "vertical-stack",
-                    "cards": [
-                        {
-                            "type": "entities",
-                            "entities": [{"entity": POWER_SWITCH_ENTITY}],
-                            "state_color": True,
-                        },
-                        {"type": "history-graph", "entities": [{"entity": POWER_SWITCH_ENTITY}]},
-                    ],
-                }
-            )
-        # The external camera is preferred as the picture behind the overview, the printer's own
-        # camera is used when it is missing or unavailable.
-        background = (
-            EXTERNAL_CAMERA_ENTITY
-            if _entity_usable(hass, EXTERNAL_CAMERA_ENTITY)
-            else (camera if camera and camera.startswith("camera.") else None)
+
+    plug = _input_entity(inputs, "printer_power_switch")
+    if plug and _entity_exists(hass, plug):
+        leading.append(
+            {
+                "type": "vertical-stack",
+                "cards": [
+                    {"type": "entities", "entities": [{"entity": plug}], "state_color": True},
+                    {"type": "history-graph", "entities": [{"entity": plug}]},
+                ],
+            }
         )
-        if background:
-            leading.append(_overview_card(hass, printer, labels, background))
+
+    # The second camera is preferred as the picture behind the overview. The printer's own camera
+    # is used when there is none or it is unavailable.
+    second_camera = _input_entity(inputs, "printer_camera_2")
+    background = (
+        second_camera
+        if second_camera and _entity_usable(hass, second_camera)
+        else (camera if camera and camera.startswith("camera.") else None)
+    )
+    if background:
+        leading.append(_overview_card(hass, printer, labels, background))
 
     return {
         "title": f"{labels['printer']}{suffix}",
@@ -583,9 +611,7 @@ def build_dashboard_config(hass: HomeAssistant) -> dict[str, Any]:
     for index, printer in enumerate(printers, start=1):
         suffix = f" – {printer.name}" if len(printers) > 1 else ""
         path_suffix = f"-{index}" if len(printers) > 1 else ""
-        printer_view = _printer_view(
-            hass, printer, labels, suffix, f"printer{path_suffix}", personal=index == 1
-        )
+        printer_view = _printer_view(hass, printer, labels, suffix, f"printer{path_suffix}")
         if printer_view["sections"]:
             views.append(printer_view)
         filament_view = _filament_view(hass, printer, labels, suffix, f"filament{path_suffix}")

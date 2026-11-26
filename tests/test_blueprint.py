@@ -118,7 +118,7 @@ def env(hass: HomeAssistant, freezer) -> Env:
 async def test_blueprint_is_valid_with_and_without_optional_inputs(hass: HomeAssistant) -> None:
     data = loader.parse_yaml(BLUEPRINT.read_text())
     blueprint = models.Blueprint(data, expected_domain="automation", path="x.yaml", schema=schemas.BLUEPRINT_SCHEMA)
-    for extra in ({}, {"printer_camera_2": "camera.second"}):
+    for extra in ({}, {"printer_camera_2": "camera.second", "printer_power_switch": "switch.plug"}):
         inputs = models.BlueprintInputs(
             blueprint, {"use_blueprint": {"path": "x.yaml", "input": {**INPUTS, **extra}}}
         )

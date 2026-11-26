@@ -1,5 +1,9 @@
 """Tests for the generated printer dashboard."""
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
+from homeassistant.components.automation import DATA_COMPONENT as AUTOMATION_DATA_COMPONENT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er, template
 from homeassistant.setup import async_setup_component
@@ -179,10 +183,25 @@ async def test_dashboard_is_registered_and_served(hass: HomeAssistant, hass_ws_c
     assert DASHBOARD_URL_PATH not in (await client.receive_json())["result"]
 
 
-async def test_owner_cards_come_first_from_left_to_right(hass: HomeAssistant) -> None:
+def _automations(hass: HomeAssistant, *inputs: dict) -> None:
+    """Make Home Assistant report automations made from the blueprint with these inputs."""
+    hass.data[AUTOMATION_DATA_COMPONENT] = SimpleNamespace(
+        entities=[
+            SimpleNamespace(raw_config={"use_blueprint": {"path": "x.yaml", "input": dict(i)}}) for i in inputs
+        ]
+    )
+
+
+BLUEPRINT_INPUTS = {"obico_host": "http://ml:3333", "printer_camera": "camera.min_printer_kamera"}
+
+
+async def test_plug_and_second_camera_come_from_the_blueprint(hass: HomeAssistant) -> None:
     _add_printer(hass)
-    hass.states.async_set("switch.3d_printers_12_socket_1", "on")
-    hass.states.async_set("camera.verksted_iphonese", "idle")
+    hass.states.async_set("switch.printer_plug", "on")
+    hass.states.async_set("camera.workshop", "idle")
+    _automations(
+        hass, {**BLUEPRINT_INPUTS, "printer_power_switch": "switch.printer_plug", "printer_camera_2": "camera.workshop"}
+    )
     view = build_dashboard_config(hass)["views"][0]
 
     assert view["type"] == "sections"
@@ -190,36 +209,77 @@ async def test_owner_cards_come_first_from_left_to_right(hass: HomeAssistant) ->
     cards = _cards(view)
     # Power plug, overview picture, camera, then the generated cards.
     assert cards[0]["type"] == "vertical-stack"
-    assert cards[0]["cards"][0]["entities"] == [{"entity": "switch.3d_printers_12_socket_1"}]
+    assert cards[0]["cards"][0]["entities"] == [{"entity": "switch.printer_plug"}]
     assert cards[0]["cards"][1]["type"] == "history-graph"
     assert cards[1]["type"] == "picture-elements"
-    assert cards[1]["camera_image"] == "camera.verksted_iphonese"
-    assert cards[1]["title"] == "P1S" or cards[1]["title"] == "Printer"
+    assert cards[1]["camera_image"] == "camera.workshop"
     assert cards[2]["type"] == "picture-entity"
     assert cards[2]["entity"] == "camera.min_printer_kamera"
     assert cards[2]["fit_mode"] == "fill"
     # Every card sits in a section of its own.
     assert all(len(section["cards"]) == 1 for section in view["sections"])
-    # Nothing from the other printer's web page is included.
-    assert "iframe" not in str(view)
-    assert "192.168" not in str(view)
 
 
 async def test_overview_falls_back_to_the_printer_camera(hass: HomeAssistant) -> None:
     _add_printer(hass)
-    hass.states.async_set("camera.verksted_iphonese", "unavailable")
+    hass.states.async_set("camera.workshop", "unavailable")
+    _automations(hass, {**BLUEPRINT_INPUTS, "printer_camera_2": "camera.workshop"})
     overview = next(
         card for card in _cards(build_dashboard_config(hass)["views"][0]) if card["type"] == "picture-elements"
     )
     assert overview["camera_image"] == "camera.min_printer_kamera"
 
 
-async def test_owner_entities_are_left_out_when_they_do_not_exist(hass: HomeAssistant) -> None:
+@pytest.mark.parametrize(
+    "inputs",
+    [
+        None,  # no automation at all
+        {**BLUEPRINT_INPUTS},  # optional inputs not set
+        {**BLUEPRINT_INPUTS, "printer_power_switch": [], "printer_camera_2": []},  # stored as empty lists
+        {**BLUEPRINT_INPUTS, "printer_power_switch": "switch.missing", "printer_camera_2": "camera.missing"},
+    ],
+)
+async def test_nothing_extra_without_blueprint_inputs(hass: HomeAssistant, inputs) -> None:
     _add_printer(hass)
+    if inputs is not None:
+        _automations(hass, inputs)
     cards = _cards(build_dashboard_config(hass)["views"][0])
-    assert "switch.3d_printers_12_socket_1" not in str(cards)
-    assert "camera.verksted_iphonese" not in str(cards)
+    assert "switch." not in str(cards)
     assert cards[0]["type"] == "picture-elements"
+    assert cards[0]["camera_image"] == "camera.min_printer_kamera"
+
+
+async def test_automation_is_matched_to_the_printer_by_its_camera(hass: HomeAssistant) -> None:
+    _add_printer(hass)
+    hass.states.async_set("switch.plug_one", "on")
+    hass.states.async_set("switch.plug_two", "on")
+    _automations(
+        hass,
+        {**BLUEPRINT_INPUTS, "printer_camera": "camera.other_printer", "printer_power_switch": "switch.plug_two"},
+        {**BLUEPRINT_INPUTS, "printer_power_switch": "switch.plug_one"},
+    )
+    cards = _cards(build_dashboard_config(hass)["views"][0])
+    assert cards[0]["cards"][0]["entities"] == [{"entity": "switch.plug_one"}]
+
+
+async def test_other_automations_and_odd_data_are_ignored(hass: HomeAssistant) -> None:
+    _add_printer(hass)
+    hass.states.async_set("switch.printer_plug", "on")
+    hass.data[AUTOMATION_DATA_COMPONENT] = SimpleNamespace(
+        entities=[
+            SimpleNamespace(raw_config=None),
+            SimpleNamespace(raw_config={}),
+            SimpleNamespace(),  # no raw_config at all
+            SimpleNamespace(raw_config={"use_blueprint": "text"}),
+            SimpleNamespace(raw_config={"use_blueprint": {"input": "text"}}),
+            # Another blueprint that happens to have a plug input.
+            SimpleNamespace(
+                raw_config={"use_blueprint": {"path": "y.yaml", "input": {"printer_power_switch": "switch.printer_plug"}}}
+            ),
+        ]
+    )
+    cards = _cards(build_dashboard_config(hass)["views"][0])
+    assert "switch.printer_plug" not in str(cards)
 
 
 async def test_overview_overlay_only_has_existing_entities(hass: HomeAssistant) -> None:
@@ -244,3 +304,40 @@ async def test_overview_overlay_only_has_existing_entities(hass: HomeAssistant) 
     assert set(icons) == {"binary_sensor.min_printer_hms", "light.min_printer_lys"}
     assert icons["light.min_printer_lys"]["tap_action"] == {"action": "toggle"}
     assert icons["light.min_printer_lys"]["style"]["bottom"] == "2%"
+
+
+async def test_inputs_are_read_from_a_real_automation(hass: HomeAssistant) -> None:
+    """Use Home Assistant's own automation and blueprint loading instead of stand-ins."""
+    _add_printer(hass)
+    hass.states.async_set("switch.printer_plug", "on")
+    hass.states.async_set("camera.workshop", "idle")
+
+    target = Path(hass.config.path("blueprints/automation/test/spaghetti_detection.yaml"))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text((Path(__file__).parent.parent / "blueprints" / "spaghetti_detection.yaml").read_text())
+
+    assert await async_setup_component(
+        hass,
+        "automation",
+        {
+            "automation": {
+                "use_blueprint": {
+                    "path": "test/spaghetti_detection.yaml",
+                    "input": {
+                        "obico_host": "http://ml:3333",
+                        "printer_print_status_sensor": "sensor.min_printer_print_status_omdopt",
+                        "printer_current_stage_sensor": "sensor.min_printer_stage_omdopt",
+                        "printer_camera": "camera.min_printer_kamera",
+                        "printer_camera_2": "camera.workshop",
+                        "printer_power_switch": "switch.printer_plug",
+                        "printer_chamber_light": "light.min_printer_lys",
+                    },
+                }
+            }
+        },
+    )
+    await hass.async_block_till_done()
+
+    cards = _cards(build_dashboard_config(hass)["views"][0])
+    assert cards[0]["cards"][0]["entities"] == [{"entity": "switch.printer_plug"}]
+    assert cards[1]["camera_image"] == "camera.workshop"

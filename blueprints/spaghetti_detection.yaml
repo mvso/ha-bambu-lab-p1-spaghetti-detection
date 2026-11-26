@@ -116,6 +116,16 @@ blueprint:
         entity:
           filter:
             - domain: camera
+    printer_power_switch:
+      name: Printer Power Switch
+      description: >-
+        Optional. The smart plug or switch that powers the printer. It is shown with its history on the printer
+        dashboard of the integration, and the automation does not use it.
+      default: []
+      selector:
+        entity:
+          filter:
+            - domain: switch
     printer_pause_button:
       name: Printer Pause Button Entity
       description: >-
