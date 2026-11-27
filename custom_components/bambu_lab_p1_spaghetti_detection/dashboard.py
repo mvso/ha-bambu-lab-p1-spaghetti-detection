@@ -326,11 +326,6 @@ def _entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
     )
 
 
-def _entity_usable(hass: HomeAssistant, entity_id: str) -> bool:
-    state = hass.states.get(entity_id)
-    return state is not None and state.state != "unavailable"
-
-
 def _state_icon(entity_id: str | None, icon: str, color: str, position: dict[str, str], **extra) -> list:
     if not entity_id:
         return []
@@ -519,11 +514,12 @@ def _printer_view(
         )
 
     # The second camera is preferred as the picture behind the overview. The printer's own camera
-    # is used when there is none or it is unavailable.
+    # is only used when there is none, or the entity does not exist at all. A second camera that is
+    # unavailable at the moment is still shown, as that is the picture that was asked for.
     second_camera = _input_entity(inputs, "printer_camera_2")
     background = (
         second_camera
-        if second_camera and _entity_usable(hass, second_camera)
+        if second_camera and _entity_exists(hass, second_camera)
         else (camera if camera and camera.startswith("camera.") else None)
     )
     if background:

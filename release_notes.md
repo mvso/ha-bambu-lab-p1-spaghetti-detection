@@ -1,3 +1,8 @@
+### V1.4.1
+
+- The picture at the top of the printer dashboard always shows the second camera set in the blueprint, also when that
+  camera is unavailable at the moment. Before, the printer's own camera was shown instead.
+
 ### V1.4.0
 
 - The power plug card and the picture behind the dashboard overview now come from the blueprint's new optional inputs
