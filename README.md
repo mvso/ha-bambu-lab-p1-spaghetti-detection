@@ -178,7 +178,7 @@ actually has.
 Two of the cards come from optional inputs in the blueprint, so there is nothing to edit in the code. The dashboard
 reads them from your automation: **Printer Power Switch** adds a card with the history of the smart plug, placed
 furthest to the left, and **Second Camera Entity** is used as the picture behind the overview, with the printer's own
-camera as the fallback when it is unavailable. Leave them empty and the cards are left out. A change in the automation
+camera when none is set. The camera below it is always the printer's own. Leave them empty and the cards are left out. A change in the automation
 shows up the next time the dashboard is opened.
 
 The dashboard is rebuilt each time it is opened, so a new AMS or a second printer shows up after reloading the page. It

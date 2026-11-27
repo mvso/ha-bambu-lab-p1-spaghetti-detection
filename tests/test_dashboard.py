@@ -220,14 +220,17 @@ async def test_plug_and_second_camera_come_from_the_blueprint(hass: HomeAssistan
     assert all(len(section["cards"]) == 1 for section in view["sections"])
 
 
-async def test_overview_falls_back_to_the_printer_camera(hass: HomeAssistant) -> None:
+async def test_second_camera_is_shown_even_when_it_is_unavailable(hass: HomeAssistant) -> None:
     _add_printer(hass)
     hass.states.async_set("camera.workshop", "unavailable")
     _automations(hass, {**BLUEPRINT_INPUTS, "printer_camera_2": "camera.workshop"})
-    overview = next(
-        card for card in _cards(build_dashboard_config(hass)["views"][0]) if card["type"] == "picture-elements"
-    )
-    assert overview["camera_image"] == "camera.min_printer_kamera"
+    cards = _cards(build_dashboard_config(hass)["views"][0])
+    overview = next(card for card in cards if card["type"] == "picture-elements")
+    assert overview["camera_image"] == "camera.workshop"
+    # The overview is the first of the two pictures, the printer camera comes after it.
+    pictures = [card for card in cards if card["type"] in ("picture-elements", "picture-entity")]
+    assert [card["type"] for card in pictures] == ["picture-elements", "picture-entity"]
+    assert pictures[1]["entity"] == "camera.min_printer_kamera"
 
 
 @pytest.mark.parametrize(
