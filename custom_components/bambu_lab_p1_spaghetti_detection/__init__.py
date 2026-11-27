@@ -1,26 +1,25 @@
 import logging
 
-import aiohttp
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
-from homeassistant.exceptions import HomeAssistantError
 
-DOMAIN = "bambu_lab_p1_spaghetti_detection"
-BRAND = "Bambu Lab P1 - Spaghetti Detection"
-
-LOGGER = logging.getLogger(__package__)
-
-PLATFORMS = [Platform.NUMBER, Platform.DATETIME]
-
+from .const import DOMAIN
 from .dashboard import (
     async_register_dashboard,
     async_unregister_dashboard,
     build_dashboard_config,
 )
+from .detection import DetectionEngine
+from .ml_client import async_predict
+from .runtime import Runtime
 
-REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
+BRAND = "Bambu Lab P1 - Spaghetti Detection"
+
+LOGGER = logging.getLogger(__package__)
+
+PLATFORMS = [Platform.NUMBER, Platform.DATETIME, Platform.SENSOR]
 
 SPAGHETTI_DETECTION_SCHEMA = vol.Schema({
     vol.Required("obico_host"): str,
@@ -31,34 +30,23 @@ SPAGHETTI_DETECTION_SCHEMA = vol.Schema({
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the Bambu Lab P1 - Spaghetti Detection integration."""
+    runtime = Runtime()
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = runtime
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # The built-in detection, which is only active when it is turned on in the settings.
+    runtime.engine = DetectionEngine(hass, entry, runtime)
+    await runtime.engine.async_start()
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     async def spaghetti_detection_handler(call: ServiceCall) -> ServiceResponse:
         """Handle the custom service."""
-        obico_host = call.data.get("obico_host", "")
-        obico_auth_token = call.data.get("obico_auth_token", "")
-        image_url = call.data.get("image_url", "")
-
-        if obico_host.endswith("/"):
-            obico_host = obico_host[:-1]
-
-        # The image URL carries its own query string (the camera access token),
-        # so it is passed as a parameter to get it encoded correctly.
-        try:
-            async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
-                async with session.get(f"{obico_host}/p/",
-                                       params={"img": image_url},
-                                       headers={"Authorization": f"Bearer {obico_auth_token}"}) as response:
-                    if response.status in (401, 503):
-                        raise HomeAssistantError(
-                            "Obico ML server rejected the auth token. Make sure the server and the "
-                            "automation use the same secret, and that it is not the old default value."
-                        )
-                    response.raise_for_status()
-                    result = await response.json()
-        except (aiohttp.ClientError, TimeoutError) as err:
-            raise HomeAssistantError(f"Could not reach the Obico ML server: {err}") from err
-
+        result = await async_predict(
+            hass,
+            call.data.get("obico_host", ""),
+            call.data.get("obico_auth_token", ""),
+            call.data.get("image_url", ""),
+        )
         return {"result": result}
 
     hass.services.async_register(
@@ -87,8 +75,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Start over with the new settings."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload Bambu Lab P1 - Spaghetti Detection integration."""
+    runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if runtime is not None and runtime.engine is not None:
+        await runtime.engine.async_stop()
     async_unregister_dashboard(hass)
     hass.services.async_remove(DOMAIN, "generate_dashboard")
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+    return unloaded

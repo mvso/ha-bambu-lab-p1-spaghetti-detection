@@ -1,3 +1,14 @@
+### V1.5.0
+
+- The integration can do the detection itself, without the blueprint. It is set up under **Configure** on the
+  integration, where the address and secret of the ML server are tested when you save. It is turned off until you turn
+  it on.
+- A new sensor shows the status of the detection and the reason for an error.
+- A failure is reported as the event `bambu_lab_p1_spaghetti_detection_failure_detected`. Notifications and the pause
+  and stop of the printer are not part of the built-in detection yet, so keep using the blueprint for those.
+- The values of the detection are remembered over a restart of Home Assistant.
+- The `predict` action uses the same client, and Home Assistant's shared connection.
+
 ### V1.4.2
 
 - Fixed the dashboard not finding the power switch and second camera of the blueprint on newer Home Assistant versions.

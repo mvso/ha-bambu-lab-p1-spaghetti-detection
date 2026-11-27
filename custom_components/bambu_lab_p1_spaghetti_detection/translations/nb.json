@@ -1,0 +1,75 @@
+{
+  "options": {
+    "step": {
+      "init": {
+        "title": "Spaghetti-deteksjon",
+        "description": "La integrasjonen gjøre deteksjonen selv, uten blueprint. Mens skriveren printer, sendes et bilde fra kameraet til Obico ML-serveren med noen sekunders mellomrom. En feil rapporteres som hendelsen `bambu_lab_p1_spaghetti_detection_failure_detected`, som en automasjon kan bruke til å sende varsel. Slå av automasjonen som er laget fra blueprinten før du slår dette på, ellers kjører begge.",
+        "data": {
+          "enabled": "Kjør deteksjonen",
+          "obico_host": "Adresse til Obico ML-serveren",
+          "obico_auth_token": "Hemmelighet til Obico ML-serveren",
+          "home_assistant_host": "Adresse til Home Assistant",
+          "camera": "Kamera",
+          "camera_2": "Kamera nr. 2",
+          "print_status_sensor": "Sensor for utskriftsstatus",
+          "stage_sensor": "Sensor for gjeldende steg",
+          "chamber_light": "Kammerlys",
+          "auto_turn_on_light": "Slå på kammerlyset automatisk",
+          "detection_frequency": "Hvor ofte"
+        },
+        "data_description": {
+          "obico_host": "For eksempel http://192.168.1.50:3333",
+          "obico_auth_token": "Hemmeligheten du satte i add-on-en eller med ML_API_TOKEN. Den gamle standardverdien godtas ikke.",
+          "home_assistant_host": "Valgfri. Adressen ML-serveren bruker for å hente bildet, for eksempel http://192.168.1.50:8123. La stå tom for å bruke Home Assistants interne adresse.",
+          "camera": "Printerens kamera, eller et som ser utskriften.",
+          "camera_2": "Valgfritt. Begge kameraene analyseres, og høyeste poengsum gjelder. Feiler det ene, brukes det andre.",
+          "print_status_sensor": "Sensoren «Print status» for printeren. Deteksjonen kjører mens den er «running».",
+          "stage_sensor": "Sensoren «Current stage» for printeren. En ny utskrift starter når den blir «printing».",
+          "chamber_light": "Valgfritt. Lyset slås på før hvert bilde hvis det er av.",
+          "detection_frequency": "To kameraer gir dobbelt så mange bilder til ML-serveren, så vurder lengre tid."
+        }
+      }
+    },
+    "error": {
+      "required": "Dette må fylles ut for å kjøre deteksjonen.",
+      "invalid_url": "Skriv en adresse som starter med http:// eller https://.",
+      "cannot_connect": "Fikk ikke kontakt med Obico ML-serveren. Sjekk adressen og at add-on-en eller containeren kjører.",
+      "invalid_auth": "ML-serveren avviste hemmeligheten. Den må være lik den i add-on-en.",
+      "no_secret": "ML-serveren har ingen egen hemmelighet og avviser alt. Sett en i add-on-en eller med ML_API_TOKEN."
+    }
+  },
+  "selector": {
+    "frequency": {
+      "options": {
+        "1": "Hvert sekund",
+        "5": "Hvert 5. sekund",
+        "10": "Hvert 10. sekund",
+        "30": "Hvert 30. sekund",
+        "59": "Hvert 60. sekund"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "state": {
+          "off": "Av",
+          "waiting": "Venter på en utskrift",
+          "warming_up": "Samler bilder",
+          "monitoring": "Overvåker",
+          "error": "Feil"
+        }
+      }
+    }
+  },
+  "services": {
+    "predict": {
+      "name": "Analyser spaghetti",
+      "description": "Kjører Obico ML-modellen for å se om bildet har spaghetti"
+    },
+    "generate_dashboard": {
+      "name": "Lag printerdashbord",
+      "description": "Gir printerdashbordet med entitetene til printeren utfylt, klart til å limes inn i rå konfigurasjon."
+    }
+  }
+}

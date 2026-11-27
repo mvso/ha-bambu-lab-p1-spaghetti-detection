@@ -1,4 +1,6 @@
-from homeassistant.components.number import NumberEntity, NumberEntityDescription
+from homeassistant.components.number import NumberEntityDescription, RestoreNumber
+
+from .runtime import get_runtime
 
 NUMBER_TYPES: tuple[NumberEntityDescription, ...] = (
     NumberEntityDescription(
@@ -91,17 +93,26 @@ async def async_setup_entry(hass, entry, async_add_entities):
         BambuLabP1SpaghettiDetectionNumberEntity(entity_description) for entity_description in NUMBER_TYPES
     ]
 
+    runtime = get_runtime(hass, entry.entry_id)
+    if runtime is not None:
+        runtime.numbers = {entity.entity_description.key: entity for entity in entities}
+
     async_add_entities(entities)
 
 
-class BambuLabP1SpaghettiDetectionNumberEntity(NumberEntity):
+class BambuLabP1SpaghettiDetectionNumberEntity(RestoreNumber):
     def __init__(self, entity_description):
         self.entity_description = entity_description
 
         self.entity_id = "number.bambu_lab_p1_spaghetti_detection_%s" % entity_description.key
         self._attr_unique_id = "number.bambu_lab_p1_spaghetti_detection_%s" % entity_description.key
-        if self._attr_native_value is None:
-            self._attr_native_value = 0
+        self._attr_native_value = 0
+
+    async def async_added_to_hass(self) -> None:
+        """Take the value from before a restart, so the detection can carry on."""
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_number_data()) is not None and last.native_value is not None:
+            self._attr_native_value = last.native_value
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the value of the number entity."""

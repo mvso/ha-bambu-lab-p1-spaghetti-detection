@@ -22,5 +22,68 @@
       "name": "Generate printer dashboard",
       "description": "Returns the printer dashboard with the entities of your printer filled in, ready to paste into a dashboard's raw configuration editor."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Spaghetti detection",
+        "description": "Let the integration do the detection itself, without the blueprint. While the printer is printing, a picture of the camera is sent to the Obico ML server every few seconds. A failure is reported as the event `bambu_lab_p1_spaghetti_detection_failure_detected`, which an automation can use to send a notification. Turn off the automation made from the blueprint before you turn this on, or both will run.",
+        "data": {
+          "enabled": "Run the detection",
+          "obico_host": "Obico ML server address",
+          "obico_auth_token": "Obico ML server secret",
+          "home_assistant_host": "Home Assistant address",
+          "camera": "Camera",
+          "camera_2": "Second camera",
+          "print_status_sensor": "Print status sensor",
+          "stage_sensor": "Current stage sensor",
+          "chamber_light": "Chamber light",
+          "auto_turn_on_light": "Turn on the chamber light automatically",
+          "detection_frequency": "Detection frequency"
+        },
+        "data_description": {
+          "obico_host": "For example http://192.168.1.50:3333",
+          "obico_auth_token": "The secret you set in the add-on or with ML_API_TOKEN. The old default value is not accepted.",
+          "home_assistant_host": "Optional. The address the ML server uses to fetch the picture, for example http://192.168.1.50:8123. Leave it empty to use the internal address of Home Assistant.",
+          "camera": "The camera of the printer, or one that sees the print.",
+          "camera_2": "Optional. Both cameras are analysed and the highest score counts. If one fails, the other is still used.",
+          "print_status_sensor": "The Print status sensor of the printer. The detection runs while it is running.",
+          "stage_sensor": "The Current stage sensor of the printer. A new print starts when it becomes printing.",
+          "chamber_light": "Optional. The light is turned on before each picture if it is off.",
+          "detection_frequency": "Two cameras means twice as many pictures for the ML server, so consider a longer time."
+        }
+      }
+    },
+    "error": {
+      "required": "This must be filled in to run the detection.",
+      "invalid_url": "Enter an address starting with http:// or https://.",
+      "cannot_connect": "Could not reach the Obico ML server. Check the address and that the add-on or container is running.",
+      "invalid_auth": "The ML server rejected the secret. It must be the same as in the add-on.",
+      "no_secret": "The ML server has no secret of its own and refuses all requests. Set one in the add-on or with ML_API_TOKEN."
+    }
+  },
+  "selector": {
+    "frequency": {
+      "options": {
+        "1": "Every second",
+        "5": "Every 5 seconds",
+        "10": "Every 10 seconds",
+        "30": "Every 30 seconds",
+        "59": "Every 60 seconds"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "state": {
+          "off": "Off",
+          "waiting": "Waiting for a print",
+          "warming_up": "Collecting pictures",
+          "monitoring": "Monitoring",
+          "error": "Error"
+        }
+      }
+    }
   }
 }

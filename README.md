@@ -203,6 +203,52 @@ Home Assistant has no official way for an integration to add a dashboard, so the
 can change between Home Assistant releases. If that happens the integration keeps working and logs a warning, and the
 action above still gives you the dashboard.
 
+## 5. Built-in detection (instead of the blueprint)
+
+The integration can do the detection itself, so the blueprint and its automation are not needed. It is turned off until
+you set it up, and it is meant to replace the blueprint, not to run next to it.
+
+1. Go to **Settings → Devices & services → Bambu Lab P1 - Spaghetti Detection** and click **Configure**.
+2. Fill in the address and secret of the ML server, the camera and the two sensors of the printer, and turn on **Run the
+   detection**. The address and secret are tested when you save, so a wrong IP address or secret is pointed out right
+   away.
+3. Turn off, or delete, the automation made from the blueprint.
+
+| Setting | Description |
+| ---- | ----- |
+| **Obico ML server address** | For example `http://192.168.1.50:3333`. |
+| **Obico ML server secret** | The secret from the add-on or `ML_API_TOKEN`. The old default value is not accepted. |
+| **Home Assistant address** | Optional. The address the ML server uses to fetch the picture. Empty means the internal address of Home Assistant. |
+| **Camera** / **Second camera** | The second one is optional. Both are analysed and the highest score counts. If one fails, the other is still used. |
+| **Print status sensor** | The *Print status* sensor of the printer. The detection runs while it is `running`. |
+| **Current stage sensor** | The *Current stage* sensor of the printer. A new print starts when it becomes `printing`. |
+| **Chamber light** | Optional. Turned on before each picture if it is off, when automatic light is on. |
+| **Detection frequency** | Every 1, 5, 10, 30 or 60 seconds. Use a longer time with two cameras. |
+
+The calculation is the same as the blueprint's, and the values are kept in the same number entities. They are now
+remembered over a restart of Home Assistant. The sensor **Spaghetti Detection - Status** says what the detection is
+doing: off, waiting for a print, collecting pictures (the first 30 of a print), monitoring or error. An error has its
+reason in the attribute `error`, and it is also shown on the dashboard.
+
+**Notifications and controlling the printer are not part of the built-in detection yet.** A failure is reported as the
+event `bambu_lab_p1_spaghetti_detection_failure_detected` with the data `confidence` (0 to 1) and `camera`. Until the
+rest is added you can use it in an automation of your own, for example:
+
+```yaml
+alias: Spaghetti detected
+triggers:
+  - trigger: event
+    event_type: bambu_lab_p1_spaghetti_detection_failure_detected
+actions:
+  - action: notify.mobile_app_<your_phone>
+    data:
+      title: Bambu Lab - Spaghetti Detected
+      message: "Confidence: {{ (trigger.event.data.confidence * 100) | int }}%"
+```
+
+If you need notifications with a picture and buttons, or the pause and stop of the printer, keep using the blueprint
+for now.
+
 ## Credits
 
 - **Greg Hesp ([@greghesp](https://github.com/greghesp))**: https://github.com/greghesp/ha-bambulab

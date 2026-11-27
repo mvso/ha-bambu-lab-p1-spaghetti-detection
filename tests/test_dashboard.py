@@ -367,3 +367,15 @@ async def test_inputs_are_read_from_a_real_automation(hass: HomeAssistant) -> No
     cards = _cards(build_dashboard_config(hass)["views"][0])
     assert cards[0]["cards"][0]["entities"] == [{"entity": "switch.printer_plug"}]
     assert cards[1]["camera_image"] == "camera.workshop"
+
+
+async def test_the_detection_status_is_the_first_row_of_the_detection_card(hass: HomeAssistant) -> None:
+    _add_printer(hass)
+    er.async_get(hass).async_get_or_create(
+        "sensor", DOMAIN, f"sensor.{DOMAIN}_status", suggested_object_id="spaghetti_status"
+    )
+    stack = next(
+        card for card in _cards(build_dashboard_config(hass)["views"][0])
+        if card["type"] == "vertical-stack" and card["cards"][0].get("title") == "Spaghetti detection"
+    )
+    assert stack["cards"][0]["entities"][0] == {"entity": "sensor.spaghetti_status", "name": "Detection status"}

@@ -52,6 +52,7 @@ LABELS = {
         "hms": "HMS errors",
         "wifi": "Wi-Fi signal",
         "detection": "Spaghetti detection",
+        "detection_status": "Detection status",
         "probability": "Failure probability",
         "mean": "Moving average",
         "frames": "Frames analysed (this job)",
@@ -112,6 +113,7 @@ LABELS = {
         "hms": "HMS-feil",
         "wifi": "Wi-Fi-signal",
         "detection": "Spaghetti-deteksjon",
+        "detection_status": "Deteksjonsstatus",
         "probability": "Sannsynlighet for feil",
         "mean": "Glidende snitt",
         "frames": "Bilder analysert (denne jobben)",
@@ -260,7 +262,9 @@ def _detection_cards(hass: HomeAssistant, labels: dict[str, str]) -> list[dict[s
             "number", DOMAIN, f"number.{DOMAIN}_{key}"
         )
 
+    status = registry.async_get_entity_id("sensor", DOMAIN, f"sensor.{DOMAIN}_status")
     rows = _rows(
+        (status, labels["detection_status"]),
         (number("normalized_p"), labels["probability"]),
         (number("adjusted_ewm_mean"), labels["mean"]),
         (number("current_frame_number"), labels["frames"]),
@@ -328,6 +332,28 @@ def _blueprint_inputs(hass: HomeAssistant, camera: str | None) -> dict[str, Any]
         if camera and inputs.get("printer_camera") == camera:
             return inputs
     return found[0] if len(found) == 1 else {}
+
+
+def blueprint_automation_is_on(hass: HomeAssistant) -> bool:
+    """Return whether an automation made from the blueprint is turned on.
+
+    The built-in detection uses the same values as the blueprint, so the two must not run together.
+    Anything unexpected gives False.
+    """
+    try:
+        from homeassistant.components.automation import DATA_COMPONENT
+
+        component = hass.data.get(DATA_COMPONENT)
+        for entity in list(component.entities) if component is not None else []:
+            inputs = _entity_blueprint_inputs(entity)
+            if inputs is None or "obico_host" not in inputs or "printer_camera" not in inputs:
+                continue
+            state = hass.states.get(entity.entity_id)
+            if state is not None and state.state == "on":
+                return True
+    except Exception:  # noqa: BLE001 - this is only a warning
+        _LOGGER.debug("Could not check the automations", exc_info=True)
+    return False
 
 
 def _input_entity(inputs: dict[str, Any], key: str) -> str | None:
