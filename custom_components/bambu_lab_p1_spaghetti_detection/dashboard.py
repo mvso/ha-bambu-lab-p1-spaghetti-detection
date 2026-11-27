@@ -284,6 +284,23 @@ def _detection_cards(hass: HomeAssistant, labels: dict[str, str]) -> list[dict[s
     return [{"type": "vertical-stack", "cards": cards}]
 
 
+def _entity_blueprint_inputs(entity: Any) -> dict[str, Any] | None:
+    """Return the blueprint inputs of an automation entity, or None.
+
+    Home Assistant keeps the config the user saved, with its use_blueprint section, in a
+    different place depending on the version: newer versions replace raw_config by the
+    automation the blueprint produced, and only keep the saved config separately. Both places
+    are tried.
+    """
+    for name in ("_blueprint_inputs", "raw_config", "_raw_blueprint_inputs"):
+        config = getattr(entity, name, None)
+        use = config.get("use_blueprint") if isinstance(config, dict) else None
+        inputs = use.get("input") if isinstance(use, dict) else None
+        if isinstance(inputs, dict):
+            return inputs
+    return None
+
+
 def _blueprint_inputs(hass: HomeAssistant, camera: str | None) -> dict[str, Any]:
     """Return the inputs of the spaghetti detection automation that belongs to a printer.
 
@@ -298,15 +315,15 @@ def _blueprint_inputs(hass: HomeAssistant, camera: str | None) -> dict[str, Any]
         component = hass.data.get(DATA_COMPONENT)
         found: list[dict[str, Any]] = []
         for entity in list(component.entities) if component is not None else []:
-            raw = getattr(entity, "raw_config", None) or {}
-            use = raw.get("use_blueprint")
-            inputs = use.get("input") if isinstance(use, dict) else None
-            if isinstance(inputs, dict) and "obico_host" in inputs and "printer_camera" in inputs:
+            inputs = _entity_blueprint_inputs(entity)
+            if inputs is not None and "obico_host" in inputs and "printer_camera" in inputs:
                 found.append(inputs)
     except Exception:  # noqa: BLE001 - the dashboard must never break because of this
         _LOGGER.debug("Could not read the automation inputs", exc_info=True)
         return {}
 
+    if not found:
+        _LOGGER.debug("No automation made from the spaghetti detection blueprint was found")
     for inputs in found:
         if camera and inputs.get("printer_camera") == camera:
             return inputs

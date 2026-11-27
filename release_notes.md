@@ -1,3 +1,8 @@
+### V1.4.2
+
+- Fixed the dashboard not finding the power switch and second camera of the blueprint on newer Home Assistant versions.
+  Home Assistant 2026.11 keeps the saved blueprint inputs in another place than before, and the dashboard looks in both.
+
 ### V1.4.1
 
 - The picture at the top of the printer dashboard always shows the second camera set in the blueprint, also when that

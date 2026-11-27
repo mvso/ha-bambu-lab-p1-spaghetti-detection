@@ -195,6 +195,29 @@ def _automations(hass: HomeAssistant, *inputs: dict) -> None:
 BLUEPRINT_INPUTS = {"obico_host": "http://ml:3333", "printer_camera": "camera.min_printer_kamera"}
 
 
+async def test_inputs_are_found_where_newer_home_assistant_keeps_them(hass: HomeAssistant) -> None:
+    """Newer versions replace raw_config by the generated automation and keep the inputs apart."""
+    _add_printer(hass)
+    hass.states.async_set("switch.printer_plug", "on")
+    hass.states.async_set("camera.workshop", "idle")
+    saved = {
+        "use_blueprint": {
+            "path": "x.yaml",
+            "input": {**BLUEPRINT_INPUTS, "printer_power_switch": "switch.printer_plug", "printer_camera_2": "camera.workshop"},
+        }
+    }
+    generated = {"alias": "Bambu Lab - Spaghetti Detection", "trigger": [], "action": []}
+    hass.data[AUTOMATION_DATA_COMPONENT] = SimpleNamespace(
+        entities=[
+            SimpleNamespace(raw_config=generated, _blueprint_inputs=saved),  # a loaded automation
+            SimpleNamespace(raw_config=generated, _raw_blueprint_inputs=saved),  # one that failed to load
+        ]
+    )
+    cards = _cards(build_dashboard_config(hass)["views"][0])
+    assert cards[0]["cards"][0]["entities"] == [{"entity": "switch.printer_plug"}]
+    assert cards[1]["camera_image"] == "camera.workshop"
+
+
 async def test_plug_and_second_camera_come_from_the_blueprint(hass: HomeAssistant) -> None:
     _add_printer(hass)
     hass.states.async_set("switch.printer_plug", "on")
